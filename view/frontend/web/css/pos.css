@@ -1,0 +1,5375 @@
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Panth_MagePos - "Tactile Console" design system.
+ *
+ * Premium card-terminal hardware made digital: chunky tactile surfaces,
+ * one juicy accent, money as the typographic hero. Dual themes:
+ * light "Paper" (warm) and dark "Ink Console" (the showpiece).
+ *
+ * Everything is token-driven so js/pos/layout.js can re-skin live:
+ *   --pos-bg, --pos-surface, --pos-text, --pos-accent, --pos-danger,
+ *   --pos-radius, --pos-font-scale, --pos-btn-scale
+ * Accent shades are DERIVED from --pos-accent via color-mix so the
+ * settings swatches keep working. Dark theme via [data-theme="dark"].
+ * Density via [data-density="compact"].
+ *
+ * Fonts: "Bricolage Grotesque" (display/money) + "Schibsted Grotesk"
+ * (body/UI) - @font-face rules live in fonts.css; full system fallback
+ * here so nothing breaks if the woff2 files are missing.
+ *
+ * Scroll model (UIFIX contract): the PAGE never scrolls. Every
+ * scrollable region is a .pos-panel__body, .pos-scroll or
+ * .pos-modal__body flex child with min-height:0.
+ */
+
+/* ============================================================
+   1. Design tokens
+   ============================================================ */
+
+:root {
+    /* ---- pinned theme variables (overridden live by layout.js) ---- */
+    --pos-bg: #f4f1ea;
+    --pos-surface: #ffffff;
+    --pos-text: #1c1b1a;
+    --pos-accent: #ff6b4a;
+    --pos-danger: #ff5470;
+    --pos-radius: 14px;
+    --pos-font-scale: 1;
+    --pos-btn-scale: 1;
+
+    /* ---- typography ---- */
+    --pos-font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI",
+        -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial,
+        sans-serif;
+    --pos-font-body: "Schibsted Grotesk", -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    /* type scale: 12 / 13 / 15 / 17 / 20 / 26 / 34 / 44 */
+    --pos-fs-xs: calc(12px * var(--pos-font-scale));
+    --pos-fs-sm: calc(13px * var(--pos-font-scale));
+    --pos-fs-md: calc(15px * var(--pos-font-scale));
+    --pos-fs-lg: calc(17px * var(--pos-font-scale));
+    --pos-fs-xl: calc(20px * var(--pos-font-scale));
+    --pos-fs-2xl: calc(26px * var(--pos-font-scale));
+    --pos-fs-3xl: calc(34px * var(--pos-font-scale));
+    --pos-fs-4xl: calc(44px * var(--pos-font-scale));
+
+    /* legacy aliases (older partials reference these) */
+    --pos-font-size: var(--pos-fs-md);
+    --pos-font-sm: var(--pos-fs-sm);
+    --pos-font-lg: var(--pos-fs-lg);
+    --pos-font-xl: var(--pos-fs-2xl);
+
+    /* ---- LIGHT "Paper" palette ---- */
+    --pos-surface-2: #f8f6f1;
+    --pos-surface-3: #efebe2;
+    --pos-raised: #fbfaf7;
+    --pos-border: rgba(28, 27, 26, 0.08);
+    --pos-border-strong: rgba(28, 27, 26, 0.18);
+    --pos-text-muted: #6e6a63;
+    --pos-text-faint: #6b675f; /* AA: >=4.7:1 on every light surface */
+    --pos-muted: var(--pos-text-muted); /* alias used by partials */
+    --pos-highlight: rgba(255, 255, 255, 0.6); /* tactile top edge */
+
+    /* ---- status colors ---- */
+    --pos-success: #1faf76;
+    --pos-warning: #c98a12;
+    --pos-info: #2f7fd6;
+    /* text-safe status inks: status base colors are tuned for FILLS;
+       any status-colored TEXT must use the -ink token (AA >=4.5:1).
+       danger is live-themeable (pinned), so its ink is derived. */
+    --pos-success-ink: #0b7349;
+    --pos-danger-ink: color-mix(in oklch, var(--pos-danger) 75%, #000000);
+    --pos-danger-soft: color-mix(in srgb, var(--pos-danger) 12%, transparent);
+    --pos-success-soft: color-mix(in srgb, var(--pos-success) 14%, transparent);
+    --pos-warning-soft: color-mix(in srgb, var(--pos-warning) 16%, transparent);
+    --pos-info-soft: color-mix(in srgb, var(--pos-info) 14%, transparent);
+
+    /* ---- accent derivation (color-mix; re-theme via --pos-accent) ---- */
+    --pos-accent-contrast: #ffffff;
+    --pos-accent-hover: color-mix(in oklch, var(--pos-accent) 86%, #ffffff);
+    --pos-accent-pressed: color-mix(in oklch, var(--pos-accent) 84%, #000000);
+    --pos-accent-strong: var(--pos-accent-pressed); /* legacy alias */
+    --pos-accent-soft: color-mix(in srgb, var(--pos-accent) 12%, transparent);
+    --pos-accent-soft-2: color-mix(in srgb, var(--pos-accent) 20%, transparent);
+    --pos-accent-glow: color-mix(in srgb, var(--pos-accent) 40%, transparent);
+    --pos-accent-ink: color-mix(in oklch, var(--pos-accent) 68%, #000000);
+    /* Selected-state accent fill for WCAG-AA white labels (UIFIX item:
+       active cart tab + active category chip). --pos-accent-contrast is a
+       fixed #fff, so a light/mid accent fill (the coral default and most of
+       the ACCENTS ramp) failed 4.5:1 with white text. Darkening the FILL in
+       OKLCH preserves the accent's hue + chroma (stays a vivid, recognisable
+       accent - not muddy) while dropping its luminance enough that the fixed
+       white label clears 4.5:1 for every selectable accent INCLUDING the
+       custom colour picker. 64% verified ≥4.5:1 (worst hue ~4.85:1) across
+       the whole shipped ramp + common custom hues. Re-themes automatically
+       since it derives from --pos-accent. */
+    --pos-accent-active: color-mix(in oklch, var(--pos-accent) 64%, #000000);
+    --pos-accent-fill-deep: color-mix(in oklch, var(--pos-accent) 58%, #000000);
+    --pos-accent-fill-press: color-mix(in oklch, var(--pos-accent) 52%, #000000);
+
+    /* ---- atmosphere (canvas glow + 2% noise) ---- */
+    --pos-canvas-glow: radial-gradient(
+        ellipse 85% 60% at 50% -12%,
+        color-mix(in srgb, var(--pos-accent) 7%, transparent),
+        transparent 62%
+    );
+    --pos-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='0.022'/></svg>");
+
+    /* ---- spacing scale (UIFIX item 14) ----
+       The single source of truth for padding / margin / gap rhythm. No
+       component should use ad-hoc px; reach for the nearest token. The
+       scale follows a 4px base step: 1=4 · 2=8 · 3=12 · 4=16 · 5=20 ·
+       6=24 · 8=32. Density-compact tightens the larger steps below. */
+    --pos-sp-1: 4px;
+    --pos-sp-2: 8px;
+    --pos-sp-3: 12px;
+    --pos-sp-4: 16px;
+    --pos-sp-5: 20px;
+    --pos-sp-6: 24px;
+    --pos-sp-8: 32px;
+
+    /* ---- metrics ---- */
+    --pos-radius-sm: calc(var(--pos-radius) - 4px);
+    --pos-radius-lg: calc(var(--pos-radius) + 6px); /* panels: 20px */
+    --pos-gap: var(--pos-sp-3); /* single grid/keypad/card-grid gutter */
+    --pos-pad: var(--pos-sp-4); /* shared panel/modal horizontal padding */
+    --pos-header-h: 62px;
+    --pos-control-h: calc(48px * var(--pos-btn-scale)); /* touch ≥48px */
+    --pos-key-h: calc(64px * var(--pos-btn-scale)); /* keypad ≥64px */
+
+    /* ---- elevation (soft + warm in light theme) ---- */
+    --pos-shadow-1: 0 1px 2px rgba(28, 27, 26, 0.06),
+        0 8px 24px rgba(28, 27, 26, 0.08);
+    --pos-shadow-2: 0 2px 6px rgba(28, 27, 26, 0.08),
+        0 14px 36px rgba(28, 27, 26, 0.12);
+    --pos-shadow-3: 0 8px 22px rgba(28, 27, 26, 0.14),
+        0 28px 70px rgba(28, 27, 26, 0.22);
+    --pos-shadow-press: 0 1px 2px rgba(28, 27, 26, 0.1);
+
+    /* ---- motion ---- */
+    --pos-speed: 140ms;
+    --pos-ease: cubic-bezier(0.3, 0.7, 0.4, 1);
+    --pos-spring: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+    --pos-press: 90ms ease-out;
+
+    color-scheme: light;
+}
+
+/* ---- DARK "Ink Console" - the showpiece ----
+   layout.js sets data-theme on <html>, app.js mirrors it on <body>. */
+[data-theme="dark"] {
+    --pos-bg: #0e1116;
+    --pos-surface: #161b23;
+    --pos-surface-2: #1a202a;
+    --pos-surface-3: #222a36;
+    --pos-raised: #1d242e;
+    --pos-text: #f2f4f8;
+    --pos-text-muted: #8a93a3;
+    --pos-text-faint: #8992a1; /* AA: >=4.6:1 on every dark surface */
+    --pos-border: rgba(242, 244, 248, 0.07);
+    --pos-border-strong: rgba(242, 244, 248, 0.16);
+    --pos-highlight: rgba(255, 255, 255, 0.06);
+
+    --pos-success: #3ddc97;
+    --pos-warning: #ffc24b;
+    --pos-info: #5aa9ff;
+    /* text-safe status/accent inks for dark surfaces (AA >=4.5:1) */
+    --pos-success-ink: var(--pos-success);
+    --pos-danger-ink: color-mix(in oklch, var(--pos-danger) 85%, #ffffff);
+    --pos-accent-ink: color-mix(in oklch, var(--pos-accent) 70%, #ffffff);
+
+    --pos-canvas-glow: radial-gradient(
+        ellipse 78% 56% at 50% -12%,
+        #16202e 0%,
+        rgba(22, 32, 46, 0) 64%
+    );
+
+    --pos-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45),
+        0 8px 24px rgba(0, 0, 0, 0.35);
+    --pos-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.5),
+        0 16px 40px rgba(0, 0, 0, 0.45);
+    --pos-shadow-3: 0 10px 28px rgba(0, 0, 0, 0.55),
+        0 32px 80px rgba(0, 0, 0, 0.65);
+    --pos-shadow-press: 0 1px 2px rgba(0, 0, 0, 0.5);
+
+    color-scheme: dark;
+}
+
+/* ---- compact density - tighter chrome, still touch-safe ----
+   Tightens the larger spacing steps so the token-driven rhythm scales
+   uniformly; small steps (1-2) stay constant so tap targets keep air. */
+[data-density="compact"] {
+    --pos-sp-3: 8px;
+    --pos-sp-4: 12px;
+    --pos-sp-5: 16px;
+    --pos-sp-6: 18px;
+    --pos-sp-8: 24px;
+    --pos-gap: var(--pos-sp-2);
+    --pos-pad: var(--pos-sp-3);
+    --pos-header-h: 52px;
+    --pos-control-h: calc(42px * var(--pos-btn-scale));
+    --pos-key-h: calc(56px * var(--pos-btn-scale));
+    --pos-fs-md: calc(14px * var(--pos-font-scale));
+    --pos-fs-sm: calc(12px * var(--pos-font-scale));
+    --pos-fs-lg: calc(16px * var(--pos-font-scale));
+    --pos-fs-2xl: calc(23px * var(--pos-font-scale));
+}
+
+/* ============================================================
+   2. Base / reset / atmosphere
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* The page itself NEVER scrolls - every scrollable region lives inside a
+   panel body or modal body (see .pos-panel__body / .pos-modal__body). */
+html,
+body.pos-body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+body.pos-body {
+    background-color: var(--pos-bg);
+    background-image: var(--pos-canvas-glow), var(--pos-noise);
+    background-attachment: fixed, fixed;
+    color: var(--pos-text);
+    font-family: var(--pos-font-body);
+    font-size: var(--pos-fs-md);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.pos-body input,
+.pos-body textarea {
+    user-select: text;
+}
+
+.pos-body img {
+    max-width: 100%;
+    display: block;
+}
+
+.pos-body h1,
+.pos-body h2,
+.pos-body h3,
+.pos-body p {
+    margin: 0;
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+:where(.pos-body) :focus-visible {
+    outline: 2px solid var(--pos-accent);
+    outline-offset: 2px;
+    border-radius: var(--pos-radius-sm);
+}
+
+/* thin, themed scrollbars */
+.pos-body * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--pos-border-strong) transparent;
+}
+
+.pos-body ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.pos-body ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.pos-body ::-webkit-scrollbar-thumb {
+    background: var(--pos-border-strong);
+    border-radius: 99px;
+}
+
+.pos-body ::-webkit-scrollbar-thumb:hover {
+    background: var(--pos-text-faint);
+}
+
+/* when both axes scroll, the meeting corner stays invisible (no OS-grey
+   square in either theme) */
+.pos-body ::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* inner scroll region inside a flex column (cart line list scrolls while
+   totals + CHARGE stay pinned). Chain needs min-height:0 all the way. */
+.pos-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* visually hidden (barcode wedge input, a11y labels) */
+.pos-visually-hidden,
+.pos-barcode-input {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ============================================================
+   3. Typography helpers + icons
+   ============================================================ */
+
+/* money/qty - ALWAYS tabular, display face */
+.pos-amount {
+    font-family: var(--pos-font-display);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.pos-amount--negative {
+    color: var(--pos-danger-ink);
+}
+
+.pos-amount--positive {
+    color: var(--pos-success-ink);
+}
+
+/* value-change pop (JS toggles this class briefly on re-render) */
+.pos-amount--changed {
+    animation: pos-amount-pop 360ms var(--pos-spring);
+}
+
+@keyframes pos-amount-pop {
+    0% {
+        transform: scale(1);
+    }
+    35% {
+        transform: scale(1.12);
+        color: var(--pos-accent);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.pos-muted {
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-sm);
+    font-weight: 400;
+}
+
+.pos-text-danger {
+    color: var(--pos-danger-ink);
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+}
+
+.pos-text-success {
+    color: var(--pos-success-ink);
+}
+
+/* caps section heading inside modals / panels */
+.pos-section-title {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--pos-text-faint);
+    margin: var(--pos-sp-5) 0 var(--pos-sp-2);
+}
+
+.pos-section-title:first-child {
+    margin-top: 0;
+}
+
+/* inline SVG icon (sprite usage: <svg class="pos-icon"><use href="#pi-x"/></svg>) */
+.pos-icon {
+    width: calc(20px * var(--pos-btn-scale));
+    height: calc(20px * var(--pos-btn-scale));
+    flex: 0 0 auto;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: middle;
+    pointer-events: none;
+}
+
+.pos-icon--sm {
+    width: 16px;
+    height: 16px;
+}
+
+.pos-icon--lg {
+    width: calc(28px * var(--pos-btn-scale));
+    height: calc(28px * var(--pos-btn-scale));
+}
+
+.pos-divider {
+    height: 1px;
+    background: var(--pos-border);
+    margin: var(--pos-sp-3) 0;
+    border: none;
+}
+
+/* ============================================================
+   4. Splash, spinner, skeleton
+   ============================================================ */
+
+.pos-splash {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--pos-bg);
+    background-image: var(--pos-canvas-glow), var(--pos-noise);
+    z-index: 400;
+}
+
+.pos-splash__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    color: var(--pos-text-muted);
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-lg);
+    font-weight: 600;
+    animation: pos-rise 480ms var(--pos-spring) backwards;
+}
+
+.pos-splash__spinner,
+.pos-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid var(--pos-border-strong);
+    border-top-color: var(--pos-accent);
+    animation: pos-spin 0.8s linear infinite;
+}
+
+@keyframes pos-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* shimmer placeholder */
+.pos-skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-surface-3);
+    min-height: 14px;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.pos-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        100deg,
+        transparent 20%,
+        var(--pos-highlight) 50%,
+        transparent 80%
+    );
+    transform: translateX(-100%);
+    animation: pos-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes pos-shimmer {
+    to {
+        transform: translateX(100%);
+    }
+}
+
+/* ============================================================
+   5. Buttons - tactile pressables
+   ============================================================ */
+
+.pos-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pos-sp-2);
+    min-height: var(--pos-control-h);
+    min-width: var(--pos-control-h);
+    padding: 0 var(--pos-sp-5);
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    font-size: var(--pos-fs-md);
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease),
+        box-shadow var(--pos-press),
+        transform var(--pos-press);
+}
+
+.pos-btn:hover {
+    background: var(--pos-surface-2);
+    border-color: var(--pos-border-strong);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-1);
+}
+
+.pos-btn:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+.pos-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.pos-btn--primary {
+    background: linear-gradient(
+        180deg,
+        var(--pos-accent-active),
+        var(--pos-accent-fill-deep) 55%
+    );
+    border-color: var(--pos-accent-fill-press);
+    color: var(--pos-accent-contrast);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        0 2px 8px var(--pos-accent-glow);
+}
+
+.pos-btn--primary:hover:not(:disabled) {
+    background: var(--pos-accent-active);
+    border-color: var(--pos-accent-fill-press);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        0 4px 14px var(--pos-accent-glow);
+}
+
+.pos-btn--primary:active {
+    background: var(--pos-accent-fill-press);
+}
+
+.pos-btn--primary:focus-visible,
+.pos-keypad__key--confirm:focus-visible,
+.pos-checkout__newsale:focus-visible,
+.pos-receipt-modal__btn--accent:focus-visible {
+    outline: 3px solid var(--pos-accent-ink);
+    outline-offset: 2px;
+}
+
+.pos-btn--danger {
+    color: var(--pos-danger-ink);
+}
+
+.pos-btn--danger:hover:not(:disabled) {
+    background: var(--pos-danger-soft);
+    border-color: var(--pos-danger);
+}
+
+.pos-btn--danger-solid {
+    background: var(--pos-danger);
+    border-color: color-mix(in srgb, var(--pos-danger) 80%, #000);
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        var(--pos-shadow-press);
+}
+
+.pos-btn--success {
+    background: var(--pos-success);
+    border-color: color-mix(in srgb, var(--pos-success) 80%, #000);
+    color: #06281a;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        var(--pos-shadow-press);
+}
+
+.pos-btn--ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--pos-text-muted);
+    box-shadow: none;
+}
+
+.pos-btn--ghost:hover:not(:disabled) {
+    background: var(--pos-surface-3);
+    color: var(--pos-text);
+    box-shadow: none;
+}
+
+.pos-btn--link {
+    background: none;
+    border: none;
+    box-shadow: none;
+    color: var(--pos-accent-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.pos-btn--link:hover {
+    background: var(--pos-accent-soft);
+}
+
+.pos-btn--block {
+    display: flex;
+    width: 100%;
+}
+
+.pos-btn--lg {
+    min-height: calc(var(--pos-control-h) + 14px);
+    border-radius: var(--pos-radius);
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-lg);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.pos-btn--sm {
+    min-height: calc(var(--pos-control-h) - 12px);
+    min-width: calc(var(--pos-control-h) - 12px);
+    padding: 0 var(--pos-sp-3);
+    font-size: var(--pos-fs-sm);
+}
+
+/* icon-over-label toolbar button (header, cart actions) */
+.pos-btn--icon {
+    flex-direction: column;
+    gap: var(--pos-sp-1);
+    padding: var(--pos-sp-1) var(--pos-sp-3);
+    font-size: var(--pos-fs-lg);
+    font-weight: 500;
+}
+
+.pos-btn--icon .pos-btn__label {
+    font-size: calc(11px * var(--pos-font-scale));
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--pos-text-muted);
+}
+
+/* small-block reflow (UIFIX item 25): labels never push a button (or its
+   block) wider than the space it has - they ellipsize instead. */
+.pos-btn__label {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pos-btn--active,
+.pos-btn--icon.pos-btn--active {
+    background: var(--pos-accent-soft);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-ink);
+}
+
+.pos-btn--active .pos-btn__label {
+    color: var(--pos-accent-ink);
+}
+
+/* CHARGE amount inside the big primary button reads at 26px */
+.pos-btn--lg .pos-amount {
+    font-size: var(--pos-fs-2xl);
+}
+
+/* ============================================================
+   6. Form fields
+   ============================================================ */
+
+/* form field stack - label->control gap = --pos-sp-2 (UIFIX item 14
+   form rhythm). Stacking multiple fields, the control->next-label gap is
+   --pos-sp-4 (see .pos-field + .pos-field below). */
+.pos-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-2);
+    text-align: left;
+}
+
+.pos-field + .pos-field,
+.pos-field + .pos-section-title {
+    margin-top: var(--pos-sp-4);
+}
+
+.pos-field__label {
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    color: var(--pos-text-muted);
+    letter-spacing: 0.02em;
+}
+
+.pos-field__input,
+.pos-input,
+.pos-select,
+.pos-textarea {
+    width: 100%;
+    min-height: var(--pos-control-h);
+    padding: var(--pos-sp-2) var(--pos-sp-4);
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-surface);
+    color: var(--pos-text);
+    font: inherit;
+    font-size: var(--pos-fs-md);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: border-color var(--pos-speed) var(--pos-ease),
+        box-shadow var(--pos-speed) var(--pos-ease);
+}
+
+.pos-textarea {
+    min-height: calc(var(--pos-control-h) * 1.8);
+    resize: vertical;
+}
+
+.pos-field__input:focus,
+.pos-input:focus,
+.pos-select:focus,
+.pos-textarea:focus {
+    outline: none;
+    border-color: var(--pos-accent);
+    box-shadow: 0 0 0 3px var(--pos-accent-soft);
+}
+
+.pos-field__input::placeholder,
+.pos-input::placeholder,
+.pos-textarea::placeholder {
+    color: var(--pos-text-faint);
+}
+
+select.pos-field__input,
+select.pos-select {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+        linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 34px;
+}
+
+/* search row (input + buttons); optional leading icon variant */
+.pos-search {
+    display: flex;
+    gap: var(--pos-sp-2);
+    align-items: center;
+    position: relative;
+}
+
+.pos-search .pos-input {
+    flex: 1 1 auto;
+}
+
+.pos-search__icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--pos-text-faint);
+    pointer-events: none;
+}
+
+.pos-search__icon ~ .pos-input,
+.pos-search__icon + .pos-input {
+    padding-left: 42px;
+}
+
+/* toggle switch - wrapped track variant:
+   <label class="pos-switch"><input><span class="pos-switch__track"></span></label> */
+.pos-switch {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    min-height: var(--pos-control-h);
+    cursor: pointer;
+}
+
+.pos-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.pos-switch__track {
+    flex: 0 0 auto;
+    width: 50px;
+    height: 28px;
+    border-radius: 99px;
+    background: var(--pos-surface-3);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+    position: relative;
+    transition: background-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-switch__track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    transition: transform var(--pos-speed) var(--pos-spring);
+}
+
+.pos-switch input:checked + .pos-switch__track {
+    background: var(--pos-accent);
+}
+
+.pos-switch input:checked + .pos-switch__track::after {
+    transform: translateX(22px);
+}
+
+.pos-switch input:focus-visible + .pos-switch__track {
+    outline: 2px solid var(--pos-accent);
+    outline-offset: 2px;
+}
+
+.pos-switch__label {
+    font-weight: 500;
+}
+
+/* self-contained toggle switch - bare markup:
+   <label class="pos-toggle"><input type="checkbox"><span>Label</span></label>
+   The input itself is the track; the thumb is a background circle moved
+   via background-position (animatable, no pseudo-elements). */
+.pos-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    min-height: var(--pos-control-h);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.pos-toggle input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: 0 0 auto;
+    width: 50px;
+    height: 28px;
+    margin: 0;
+    border: none;
+    border-radius: 99px;
+    background-color: var(--pos-surface-3);
+    background-image: radial-gradient(circle closest-side, #ffffff 96%, transparent);
+    background-size: 22px 22px;
+    background-position: 3px center;
+    background-repeat: no-repeat;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+    cursor: pointer;
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        background-position var(--pos-speed) var(--pos-spring);
+}
+
+.pos-toggle input[type="checkbox"]:checked {
+    background-color: var(--pos-accent);
+    background-position: 25px center;
+}
+
+.pos-toggle input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--pos-accent);
+    outline-offset: 2px;
+}
+
+/* slider - styled track + chunky grabbable thumb.
+   .pos-slider canonical, .pos-range legacy alias. */
+.pos-slider,
+.pos-range {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 8px;
+    border-radius: 99px;
+    background: var(--pos-surface-3);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    margin: var(--pos-sp-3) 0;
+}
+
+.pos-slider::-webkit-slider-thumb,
+.pos-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--pos-accent);
+    border: 3px solid var(--pos-surface);
+    box-shadow: 0 2px 6px var(--pos-accent-glow);
+    cursor: grab;
+    transition: transform var(--pos-press);
+}
+
+.pos-slider::-webkit-slider-thumb:active,
+.pos-range::-webkit-slider-thumb:active {
+    transform: scale(1.12);
+    cursor: grabbing;
+}
+
+.pos-slider::-moz-range-thumb,
+.pos-range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--pos-accent);
+    border: 3px solid var(--pos-surface);
+    box-shadow: 0 2px 6px var(--pos-accent-glow);
+    cursor: grab;
+}
+
+/* segmented control */
+.pos-segment {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-surface-2);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    gap: 3px;
+}
+
+.pos-segment__btn {
+    min-height: calc(var(--pos-control-h) - 12px);
+    padding: var(--pos-sp-1) var(--pos-sp-4);
+    border: none;
+    border-radius: calc(var(--pos-radius-sm) - 2px);
+    background: transparent;
+    color: var(--pos-text-muted);
+    font: inherit;
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-segment__btn.is-active {
+    background: var(--pos-raised);
+    color: var(--pos-accent-ink);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+}
+
+/* accent swatches (settings) */
+.pos-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pos-sp-2);
+    justify-content: flex-end;
+}
+
+.pos-swatch {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 2px var(--pos-surface),
+        inset 0 -6px 10px rgba(0, 0, 0, 0.18),
+        var(--pos-shadow-press);
+    transition: transform var(--pos-press),
+        border-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-swatch:hover {
+    transform: scale(1.12);
+}
+
+.pos-swatch:active {
+    transform: scale(1);
+}
+
+.pos-swatch.is-active,
+.pos-swatch--active {
+    border-color: var(--pos-text);
+}
+
+.pos-swatch--custom {
+    position: relative;
+    overflow: hidden;
+    background: conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444);
+}
+
+.pos-swatch--custom input[type="color"] {
+    position: absolute;
+    inset: -8px;
+    width: 52px;
+    height: 52px;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0;
+}
+
+/* ============================================================
+   7. Chips, indicators, badges, steppers
+   ============================================================ */
+
+.pos-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pos-sp-2);
+    min-height: calc(var(--pos-control-h) - 12px);
+    padding: var(--pos-sp-1) var(--pos-sp-4);
+    border-radius: 99px;
+    border: 1px solid var(--pos-border-strong);
+    background: var(--pos-raised);
+    color: var(--pos-text-muted);
+    font: inherit;
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press);
+}
+
+/* hover sharpens the hairline + lifts the shadow only - background stays
+   variant-owned (open/closed/session washes must survive hover, and this
+   bare :hover outranks the single-class variants in specificity) */
+.pos-chip:hover {
+    border-color: color-mix(in srgb, var(--pos-text) 24%, transparent);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-1);
+}
+
+.pos-chip:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+/* small-block reflow (UIFIX item 25): chips with dynamic content (attached
+   customer name, note preview, coupon code) stay inside their block -
+   the text span ellipsizes instead of overflowing horizontally. */
+.pos-chip {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.pos-chip > span {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pos-chip--active {
+    background: var(--pos-accent-active);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-contrast);
+}
+
+/* status chips - open gets a live pulsing dot */
+.pos-chip--open,
+.pos-chip--closed,
+.pos-chip--session {
+    padding-left: 12px;
+}
+
+.pos-chip--open::before,
+.pos-chip--closed::before,
+.pos-chip--session::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: 0 0 auto;
+}
+
+.pos-chip--open {
+    background: var(--pos-success-soft);
+    border-color: color-mix(in srgb, var(--pos-success) 40%, transparent);
+    color: var(--pos-success-ink);
+}
+
+.pos-chip--open::before {
+    animation: pos-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes pos-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--pos-success) 45%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 5px transparent;
+    }
+}
+
+.pos-chip--closed {
+    background: var(--pos-warning-soft);
+    border-color: color-mix(in srgb, var(--pos-warning) 40%, transparent);
+    color: var(--pos-warning);
+}
+
+.pos-chip--session {
+    color: var(--pos-text-muted);
+}
+
+.pos-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+}
+
+.pos-indicator::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.pos-indicator--online {
+    color: var(--pos-success-ink);
+}
+
+.pos-indicator--online::before {
+    animation: pos-pulse 2.2s ease-in-out infinite;
+}
+
+.pos-indicator--offline {
+    color: var(--pos-danger-ink);
+}
+
+.pos-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: 99px;
+    background: var(--pos-accent-soft);
+    color: var(--pos-accent-ink);
+    font-size: var(--pos-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+[data-theme="dark"] .pos-badge {
+    color: var(--pos-accent-ink);
+}
+
+.pos-badge--danger {
+    background: var(--pos-danger-soft);
+    color: var(--pos-danger-ink);
+}
+
+.pos-badge--success {
+    background: var(--pos-success-soft);
+    color: var(--pos-success-ink);
+}
+
+.pos-badge--warning {
+    background: var(--pos-warning-soft);
+    color: var(--pos-warning);
+}
+
+/* qty stepper - value can be <span> or <input class="pos-stepper__value">
+   (UIFIX item 22): compact EQUAL −/＋ squares, ≥44px touch in every density
+   (control-h is 48 light / 42 compact, so the max() keeps the pair balanced
+   instead of oversized), centered tabular-nums value, one token gap. Used in
+   the cart lines, the item modal and the refund modal. */
+.pos-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pos-sp-1);
+    flex: 0 0 auto;
+}
+
+.pos-stepper--disabled,
+.pos-stepper.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.pos-stepper__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: max(44px, calc(var(--pos-control-h) - 10px));
+    height: max(44px, calc(var(--pos-control-h) - 10px));
+    padding: 0;
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-lg);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press), box-shadow var(--pos-press);
+}
+
+.pos-stepper__btn:hover:not(:disabled) {
+    background: var(--pos-accent-soft);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-ink);
+}
+
+.pos-stepper__btn:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+.pos-stepper__btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pos-stepper__value {
+    /* compact value cell: matches the −/＋ square rhythm, still fits "999" */
+    width: max(44px, calc(var(--pos-control-h) - 10px));
+    min-height: max(44px, calc(var(--pos-control-h) - 10px));
+    padding: 0 var(--pos-sp-1);
+    border: 1px solid transparent;
+    border-radius: var(--pos-radius-sm);
+    background: transparent;
+    color: var(--pos-text);
+    font: inherit;
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* span variant (cart lines): center the figure inside the 44px cell so it
+   sits on the same optical line as the −/＋ glyphs and the row total. */
+span.pos-stepper__value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+input.pos-stepper__value:focus {
+    outline: none;
+    border-color: var(--pos-accent);
+    background: var(--pos-surface);
+}
+
+.pos-stepper__value::-webkit-outer-spin-button,
+.pos-stepper__value::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ============================================================
+   8. App shell + header
+   ============================================================ */
+
+.pos-app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+}
+
+.pos-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-4);
+    min-height: var(--pos-header-h);
+    padding: var(--pos-sp-2) var(--pos-pad);
+    background: var(--pos-surface);
+    border-bottom: 1px solid var(--pos-border);
+    box-shadow: var(--pos-shadow-1);
+    position: relative;
+    z-index: 60;
+}
+
+.pos-header__info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.pos-header__store {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-md);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+}
+
+.pos-header__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+    white-space: nowrap;
+}
+
+.pos-header__register,
+.pos-header__cashier {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pos-header__sep {
+    color: var(--pos-text-faint);
+}
+
+.pos-header__indicator {
+    flex: 0 0 auto;
+}
+
+.pos-header__actions {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+/* UIFIX item 27: the header cluster now hosts Holds / Orders / Session
+   alongside Settings / Layout / Lock / Exit. Seven icon+label plates only
+   fit the 62px bar if each is a COMPACT, uniform unit - one sizing rule so
+   every header action (existing or newly promoted) matches exactly. Hover/
+   active/danger states inherit from .pos-btn; both themes via tokens. */
+.pos-header__actions .pos-btn--icon {
+    min-width: calc(56px * var(--pos-btn-scale));
+    /* 46px at the default 62px bar; the 44px floor holds the WCAG 2.5.5
+       touch target when compact density drops --pos-header-h to 52px */
+    min-height: max(44px, calc(var(--pos-header-h) - 16px));
+    padding: var(--pos-sp-1) var(--pos-sp-2);
+    gap: 2px;
+}
+
+.pos-header__actions .pos-btn--icon .pos-icon {
+    width: calc(18px * var(--pos-btn-scale));
+    height: calc(18px * var(--pos-btn-scale));
+}
+
+.pos-header__actions .pos-btn--icon .pos-btn__label {
+    font-size: calc(10px * var(--pos-font-scale));
+    letter-spacing: 0.03em;
+}
+
+/* offline banner (offline.js toggles [data-pos-offline-banner]) */
+.pos-offline-banner,
+[data-pos-offline-banner] {
+    background: var(--pos-warning-soft);
+    color: var(--pos-warning);
+    font-size: var(--pos-fs-sm);
+    font-weight: 700;
+    text-align: center;
+    padding: 4px 12px;
+}
+
+/* cart tabs strip - pill tabs with close x */
+.pos-cart-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+    padding: 2px;
+}
+
+.pos-cart-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: calc(var(--pos-control-h) - 10px);
+    padding: 4px 14px;
+    border: 1px solid var(--pos-border-strong);
+    border-radius: 99px;
+    background: var(--pos-raised);
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press);
+}
+
+.pos-cart-tab:active {
+    transform: translateY(1px);
+}
+
+.pos-cart-tab--active {
+    /* WCAG 1.4.3: white label on the raw accent failed 4.5:1 for light/mid
+       accents; use the luminance-aware --pos-accent-active fill so white
+       clears AA for every selectable accent. Border keeps the vivid accent
+       edge so the selected state still reads as the accent colour. */
+    background: var(--pos-accent-active);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-contrast);
+    animation: pos-tab-pop 240ms var(--pos-spring);
+}
+
+@keyframes pos-tab-pop {
+    0% {
+        transform: scale(0.94);
+    }
+    60% {
+        transform: scale(1.04);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.pos-cart-tab--new {
+    justify-content: center;
+    min-width: calc(var(--pos-control-h) - 10px);
+    padding: 4px;
+    font-size: var(--pos-fs-lg);
+    border-style: dashed;
+    font-weight: 700;
+}
+
+.pos-cart-tab__close {
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--pos-fs-md);
+    line-height: 1;
+    padding: 2px 4px;
+    margin: -2px -6px -2px 0;
+    cursor: pointer;
+    border-radius: 50%;
+    opacity: 0.7;
+}
+
+.pos-cart-tab__close:hover {
+    opacity: 1;
+}
+
+/* ============================================================
+   9. Workspace grid (24 × 16) + panel chrome
+   ============================================================ */
+
+.pos-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    grid-template-rows: repeat(16, 1fr);
+    gap: var(--pos-gap);
+    padding: var(--pos-gap);
+}
+
+.pos-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--pos-surface);
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius-lg);
+    box-shadow: var(--pos-shadow-1);
+    overflow: hidden;
+    position: relative;
+}
+
+/* sensible min block size (UIFIX item 25): no block can be shrunk into
+   uselessness - down to this floor it stays tidy (header + a scrollable
+   sliver of body). layout.js enforces the same minimum in grid units; this
+   is the CSS backstop. Desktop only: the <768px stacked fallback pins its
+   own 220px minimum. Descendant combinator (item 51): the cart sub-blocks
+   sit inside the display:contents .pos-cart-host, so a `>` child selector
+   would skip them - the floor must back-stop EVERY gridded block. (JS
+   MIN_SIZES are well above this floor, so it never fights free resize.) */
+@media (min-width: 768px) {
+    .pos-grid .pos-panel {
+        min-width: calc(120px * var(--pos-btn-scale));
+        min-height: calc(var(--pos-control-h) + 44px);
+    }
+}
+
+/* staggered load reveal - re-runs whenever a panel is toggled visible */
+.pos-grid > .pos-panel {
+    animation: pos-rise 420ms var(--pos-spring) backwards;
+}
+
+.pos-grid > .pos-panel:nth-child(1) { animation-delay: 0ms; }
+.pos-grid > .pos-panel:nth-child(2) { animation-delay: 60ms; }
+.pos-grid > .pos-panel:nth-child(3) { animation-delay: 120ms; }
+.pos-grid > .pos-panel:nth-child(4) { animation-delay: 180ms; }
+.pos-grid > .pos-panel:nth-child(5) { animation-delay: 240ms; }
+.pos-grid > .pos-panel:nth-child(6) { animation-delay: 300ms; }
+
+@keyframes pos-rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* panel header + body share the SAME horizontal padding (--pos-pad) so
+   every panel's title, content and footer edges align (UIFIX item 14
+   "panel header/body padding parity"). */
+.pos-panel__header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-2);
+    min-height: calc(var(--pos-control-h) - 6px);
+    padding: var(--pos-sp-1) var(--pos-pad);
+    border-bottom: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+}
+
+.pos-panel__title {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--pos-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pos-panel__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-2);
+    margin-left: auto;
+}
+
+/* panel header close button (UIFIX item 13) - an X affordance on every
+   floating-toggled panel (session, holds). Sits at the right of
+   .pos-panel__actions; uses the pi-x sprite icon. Mirrors the modal
+   close chrome so close gestures feel identical everywhere. */
+.pos-panel__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: calc(var(--pos-control-h) - 12px);
+    height: calc(var(--pos-control-h) - 12px);
+    padding: 0;
+    border: none;
+    border-radius: var(--pos-radius-sm);
+    background: transparent;
+    color: var(--pos-text-muted);
+    cursor: pointer;
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-panel__close:hover {
+    background: var(--pos-surface-3);
+    color: var(--pos-text);
+}
+
+.pos-panel__close:active {
+    transform: translateY(1px);
+}
+
+/* the close button only earns its space on floating panels; on docked /
+   gridded panels it stays hidden so the static layout is uncluttered. */
+.pos-panel:not(.pos-panel--floating):not(.is-floating) .pos-panel__close {
+    display: none;
+}
+
+/* THE scroll region (UIFIX item 25): every block body is the flex:1 /
+   min-height:0 scroller so a block stays usable at ANY rect - content
+   scrolls inside while the header and any .pos-panel__footer stay pinned.
+   min-width:0 keeps wide children (long labels, KPI rows) from blowing the
+   block out horizontally; the extra token bottom padding gives the last
+   row breathing room against the scroll edge. */
+.pos-panel__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--pos-pad);
+    padding-bottom: var(--pos-sp-5);
+}
+
+.pos-panel__body--flush {
+    padding: 0;
+}
+
+.pos-panel__footer {
+    flex: 0 0 auto;
+    padding: var(--pos-pad);
+    border-top: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+}
+
+/* ---------- floating overlay panels (UIFIX items 12 + 13) ----------
+   session + holds are toggled as floating overlays from the header.
+   layout.js / app.js add .pos-panel--floating (or .is-floating) when a
+   panel is shown as an overlay (rather than docked into the grid). The
+   panel then escapes the grid flow, centres on the right, gets its own
+   max-height inside the viewport and a heavier shadow. The dimmed
+   workspace behind it is .pos-floating-overlay - clicking it (or Escape)
+   closes the panel (handled by the toggling agent); the close X lives in
+   .pos-panel__close. */
+.pos-floating-overlay {
+    position: fixed;
+    inset: var(--pos-header-h) 0 0 0; /* sits below the fixed header */
+    z-index: 90;
+    background: rgba(8, 10, 14, 0.32);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    animation: pos-fade-in var(--pos-speed) var(--pos-ease);
+}
+
+.pos-panel--floating,
+.pos-panel.is-floating {
+    position: fixed;
+    z-index: 95;
+    top: calc(var(--pos-header-h) + var(--pos-sp-3));
+    right: var(--pos-sp-3);
+    bottom: var(--pos-sp-3);
+    left: auto;
+    width: min(440px, calc(100vw - var(--pos-sp-6)));
+    /* clamp height inside the viewport; the body scrolls (item 12) */
+    max-height: calc(100dvh - var(--pos-header-h) - var(--pos-sp-6));
+    /* neutralise any inline grid placement so the overlay floats free */
+    grid-column: auto !important;
+    grid-row: auto !important;
+    box-shadow: var(--pos-shadow-3);
+    border-color: var(--pos-border-strong);
+    animation: pos-float-in 200ms var(--pos-spring);
+}
+
+@keyframes pos-float-in {
+    from {
+        opacity: 0;
+        transform: translateX(20px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ---------- session panel scroll layout (UIFIX item 12) ----------
+   The X-report clipped its last movements row against the "Generated at"
+   caption. The session panel owner wraps the report in .pos-session
+   (flex column filling the panel body): KPI blocks + BY PAYMENT live in
+   .pos-session__pinned (fixed above), the movements list scrolls inside
+   .pos-session__scroll, and the "Generated at" caption is a pinned
+   .pos-session__footer BELOW the scroll region - it can never overlap a
+   row. Same min-height:0 flex-chain as the global scroll model. */
+.pos-session {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    gap: var(--pos-sp-4);
+}
+
+.pos-session__pinned {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-3);
+}
+
+.pos-session__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* breathing room so the last row never kisses the pinned footer */
+    padding-bottom: var(--pos-sp-3);
+}
+
+.pos-session__footer {
+    flex: 0 0 auto;
+    margin: 0;
+    padding-top: var(--pos-sp-3);
+    border-top: 1px solid var(--pos-border);
+    color: var(--pos-text-faint);
+    font-size: var(--pos-fs-sm);
+}
+
+/* drag handle dots - hidden, hinted on panel hover, full in edit mode */
+.pos-panel__drag {
+    display: none;
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    background-image: radial-gradient(var(--pos-text-faint) 1.5px, transparent 1.5px);
+    background-size: 6px 6px;
+    background-position: center;
+    cursor: grab;
+}
+
+.pos-panel:hover .pos-panel__drag {
+    display: block;
+    opacity: 0.35;
+}
+
+/* QUICK MOVE (UIFIX item 43): the header drag zone moves the panel even
+   OUTSIDE layout edit mode, so it advertises grab and disables native
+   touch panning there (pointermove must keep firing for the gesture -
+   layout.js only engages past a ~5px travel threshold, so taps stay
+   taps). Buttons inside the header keep their own pointer cursor.
+   Phones (<768px) keep default touch behaviour: the grid is a stacked
+   column there and layout.js disables quick move. */
+@media (min-width: 768px) {
+    .pos-panel__header[data-drag-handle] {
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .pos-panel.is-dragging .pos-panel__header[data-drag-handle] {
+        cursor: grabbing;
+    }
+}
+
+/* SE resize corner (injected by layout.js; edit mode shows it always,
+   item 44 shows it on hover in normal mode too - see below).
+   UIFIX item 51: z-index sits ABOVE every piece of in-panel chrome -
+   pinned .pos-panel__footer slabs (the cart-actions CHARGE button), the
+   bottom button rows of cart-totals/customer, quick-key edit chrome
+   (z:1) - so the SE corner is ALWAYS hit-testable for a resize grab on
+   every block. The panel itself is the stacking context (.pos-panel is
+   position:relative), so this value only competes inside the block and
+   can never rise over floating overlays (90/95) or modals (200+).
+   pointer-events:auto is pinned explicitly so no inherited
+   pointer-events:none (toolbar dodge, dragged-body mute) can ever make
+   the handle transparent to the pointer. It stays a SMALL corner zone:
+   everywhere outside these 30px the CHARGE/footer buttons receive their
+   own clicks untouched. */
+.pos-panel__resize {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 30px;
+    height: 30px;
+    cursor: nwse-resize;
+    z-index: 40;
+    pointer-events: auto;
+    background: linear-gradient(
+        135deg,
+        transparent 0 50%,
+        var(--pos-accent) 50% 60%,
+        transparent 60% 70%,
+        var(--pos-accent) 70% 80%,
+        transparent 80%
+    );
+    border-bottom-right-radius: var(--pos-radius-lg);
+    touch-action: none;
+}
+
+/* FREE RESIZE (UIFIX items 44 + 51): the SE handle also appears on panel
+   HOVER in NORMAL mode (cursor:nwse-resize from the base rule above) so
+   every gridded panel advertises resizability without entering Layout
+   edit - the same affordance promise as quick move (item 43). layout.js
+   wires the pointer gesture and keeps .is-resizing on the panel for the
+   whole drag so the handle never blinks out mid-gesture.
+
+   Item 51 - this reveal must reach EVERY block, including the three cart
+   sub-blocks: panel-cart.phtml hosts them inside a display:contents
+   wrapper (.pos-cart-host), which removes the wrapper's BOX but not the
+   DOM node - selector matching still sees it, so the old
+   `.pos-grid > .pos-panel` child combinator silently skipped cart-items /
+   cart-totals / cart-actions and their handles never displayed in normal
+   mode (the right column simply could not be resized). The DESCENDANT
+   combinator below matches both direct children (catalog, quickkeys,
+   customer, toolbar) and the hosted cart blocks. Floating overlays
+   (session / holds) stay exempt via :not(); .pos-panel never nests, so
+   the looser combinator cannot over-match.
+
+   Gates (mirroring layout.js exactly):
+   - media (min-width: 901px): layout.js refuses quick gestures at
+     <=900px (the stacked fallback), so the affordance only shows where
+     the gesture actually works - no dead handle on tablets/phones.
+   - .pos-body--can-edit-layout (set by layout.js applyPanels from the
+     cashier's can_edit_layout permission): cashiers who may not save
+     layouts never see the hover handle. Edit mode (rules further down)
+     shows handles independently - entry there is already gated. */
+@media (min-width: 901px) {
+    .pos-body--can-edit-layout .pos-grid .pos-panel:not(.pos-panel--floating):not(.is-floating):hover .pos-panel__resize,
+    .pos-body--can-edit-layout .pos-grid .pos-panel:not(.pos-panel--floating):not(.is-floating).is-resizing .pos-panel__resize {
+        display: block;
+        opacity: 0.45;
+    }
+
+    /* sharpen fully when the pointer reaches the corner or a resize is live;
+       edit mode keeps its always-on full-opacity handle (rule below) */
+    .pos-grid .pos-panel .pos-panel__resize:hover,
+    .pos-grid .pos-panel.is-resizing .pos-panel__resize,
+    .pos-body--edit .pos-grid .pos-panel:hover .pos-panel__resize,
+    .pos-grid.is-editing .pos-panel:hover .pos-panel__resize {
+        opacity: 1;
+    }
+}
+
+/* ---------- layout edit mode ----------
+   .pos-body--edit from app.js ($store.pos.layoutEdit); .is-editing set on
+   .pos-grid by layout.js. Both styled so either flag works. */
+
+/* finer grid snapping visual (UIFIX item 18d) - while editing, the
+   workspace shows a faint snap grid so true free placement reads as
+   deliberate. The 24×16 unit grid is drawn as a light dotted overlay;
+   it sits behind the panels (the grid's own children paint above it).
+   --pos-grid-cols/-rows let the layout owner mirror a finer snap step
+   (e.g. 48×32) without a CSS edit; defaults match the 24×16 model. */
+.pos-grid.is-editing,
+.pos-grid.is-quick-dragging,
+.pos-body--edit .pos-grid {
+    --pos-grid-cols: 24;
+    --pos-grid-rows: 16;
+    background-image:
+        repeating-linear-gradient(
+            to right,
+            var(--pos-border-strong) 0 1px,
+            transparent 1px calc(100% / var(--pos-grid-cols))
+        ),
+        repeating-linear-gradient(
+            to bottom,
+            var(--pos-border-strong) 0 1px,
+            transparent 1px calc(100% / var(--pos-grid-rows))
+        );
+    background-position: var(--pos-gap) var(--pos-gap);
+    background-size:
+        calc(100% - 2 * var(--pos-gap)) calc(100% - 2 * var(--pos-gap)),
+        calc(100% - 2 * var(--pos-gap)) calc(100% - 2 * var(--pos-gap));
+    background-repeat: no-repeat, no-repeat;
+}
+
+/* finer-snap flag: layout owner adds .pos-grid--fine when the snap step
+   is subdivided, doubling the visible grid density for precise nudging. */
+.pos-grid--fine.is-editing,
+.pos-grid--fine.is-quick-dragging,
+.pos-body--edit .pos-grid--fine {
+    --pos-grid-cols: 48;
+    --pos-grid-rows: 32;
+}
+
+.pos-body--edit .pos-panel,
+.pos-grid.is-editing .pos-panel {
+    outline: 2px dashed var(--pos-accent);
+    outline-offset: -2px;
+    user-select: none;
+    animation: none;
+}
+
+.pos-body--edit .pos-panel__header,
+.pos-grid.is-editing .pos-panel__header {
+    cursor: grab;
+    background: var(--pos-accent-soft);
+    touch-action: none;
+}
+
+.pos-body--edit .pos-panel__drag,
+.pos-grid.is-editing .pos-panel__drag,
+.pos-body--edit .pos-panel__resize,
+.pos-grid.is-editing .pos-panel__resize {
+    display: block;
+    opacity: 1;
+}
+
+/* edit mode dims block bodies as a "you're arranging, not selling" cue
+   but MUST keep them clickable (UIFIX item 24: "clicks on controls still
+   work in edit mode") - layout.js's INTERACTIVE_SELECTOR guard already
+   refuses to start a drag from buttons/inputs, so pointer-events stays
+   live here; only an actively dragged panel mutes its own body so a fast
+   gesture can't trip hover/click states mid-drag. */
+.pos-body--edit .pos-panel__body,
+.pos-grid.is-editing .pos-panel__body {
+    opacity: 0.6;
+}
+
+.pos-panel.is-dragging .pos-panel__body {
+    pointer-events: none;
+}
+
+/* hidden panels/blocks shown ghosted at their saved rect during editing
+   (UIFIX item 18 "edit-mode ghosting for hidden blocks") - dimmed, no
+   shadow, a muted dashed outline (vs the live accent dash) so cashiers
+   can tell a ghosted/hidden block apart from a placed one and still
+   drag/resize/re-enable it. */
+.pos-panel.is-ghost {
+    opacity: 0.4;
+    box-shadow: none;
+    filter: grayscale(0.4);
+}
+
+.pos-body--edit .pos-panel.is-ghost,
+.pos-grid.is-editing .pos-panel.is-ghost {
+    outline: 2px dashed var(--pos-text-faint);
+    background: var(--pos-surface-2);
+}
+
+.pos-panel.is-ghost .pos-panel__header {
+    background: var(--pos-surface-3);
+}
+
+.pos-panel.is-dragging {
+    opacity: 0.92;
+    box-shadow: var(--pos-shadow-3);
+    cursor: grabbing;
+}
+
+.pos-panel.is-dragging .pos-panel__header {
+    cursor: grabbing;
+}
+
+/* collision is allowed but clearly highlighted */
+.pos-panel.is-colliding {
+    outline: 2px solid var(--pos-danger) !important;
+    outline-offset: -2px;
+}
+
+/* ============================================================
+   10. Catalog: category chips, product grid + cards
+   ============================================================ */
+
+.pos-category-chips {
+    display: flex;
+    gap: var(--pos-sp-2);
+    overflow-x: auto;
+    padding: var(--pos-sp-2) 0;
+    flex: 0 0 auto;
+}
+
+/* pastel ramp hook: JS may set --tile-color (hash by id) per chip */
+.pos-category-chip {
+    flex: 0 0 auto;
+    padding: var(--pos-sp-2) var(--pos-sp-4);
+    min-height: calc(var(--pos-control-h) - 10px);
+    border: 1px solid var(--pos-border-strong);
+    border-radius: 99px;
+    background: color-mix(
+        in srgb,
+        var(--tile-color, transparent) 14%,
+        var(--pos-raised)
+    );
+    color: var(--pos-text-muted);
+    font: inherit;
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press);
+}
+
+/* hover deepens the pastel + wakes the label ink (kept BEFORE the active
+   rules so the accent fill always wins on the selected chip) */
+.pos-category-chip:hover {
+    color: var(--pos-text);
+    background: color-mix(
+        in srgb,
+        var(--tile-color, var(--pos-accent)) 24%,
+        var(--pos-raised)
+    );
+    border-color: color-mix(
+        in srgb,
+        var(--tile-color, var(--pos-accent)) 45%,
+        var(--pos-border-strong)
+    );
+}
+
+.pos-category-chip:active {
+    transform: translateY(1px);
+}
+
+.pos-category-chip.is-active,
+.pos-category-chip--active {
+    /* WCAG 1.4.3: white label on the raw accent failed 4.5:1 for light/mid
+       accents (e.g. coral default 2.82:1, amber 3.19:1). Use the
+       luminance-aware --pos-accent-active fill so the 13px/600 white label
+       clears AA for every selectable accent; keep the vivid accent border. */
+    background: var(--pos-accent-active);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-contrast);
+}
+
+/* auto-FILL + min() (UIFIX items 25 + 30): cards drop columns gracefully as
+   the catalog block narrows. auto-FILL (not auto-fit) keeps the empty tracks
+   so a lone search/category result stays a normal left-aligned tile instead
+   of stretching across the whole row (the previous auto-fit billboard bug). */
+.pos-product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(138px, 100%), 1fr));
+    gap: var(--pos-gap);
+    padding-top: var(--pos-gap);
+    justify-content: start;
+}
+
+/* product card - image-forward 4:3, price pill, 2-line name clamp.
+   UIFIX item 30: hover is a SUBTLE LIFT ONLY - small shadow increase +
+   2px translateY, never a scale/zoom. The card keeps its exact grid-cell
+   footprint (overflow:hidden + no transform on the artwork) so hovering
+   one card can never move its neighbours or balloon the image. */
+.pos-card,
+.pos-product-card {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-2);
+    padding: var(--pos-sp-2) var(--pos-sp-2) var(--pos-sp-3);
+    min-height: calc(var(--pos-control-h) * 2);
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: border-color var(--pos-speed) var(--pos-ease),
+        box-shadow var(--pos-press),
+        transform var(--pos-press);
+}
+
+.pos-card:hover,
+.pos-product-card:hover {
+    border-color: var(--pos-accent);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-2);
+    transform: translateY(-2px);
+}
+
+/* tactile press (kept): the lift collapses into the surface */
+.pos-card:active,
+.pos-product-card:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+/* item 30 guard: the artwork is pinned to its 4:3 frame - no hover/press
+   state may transform or enlarge it past the card edge */
+.pos-card:hover .pos-card__image,
+.pos-card:hover .pos-product-card__image,
+.pos-product-card:hover .pos-card__image,
+.pos-product-card:hover .pos-product-card__image,
+.pos-card:active .pos-card__image,
+.pos-product-card:active .pos-product-card__image {
+    transform: none;
+}
+
+.pos-card__image,
+.pos-product-card__image {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    /* belt-and-braces with auto-FILL: even if a card is ever stretched,
+       the capped artwork keeps it a tidy tile, not a billboard */
+    max-height: calc(160px * var(--pos-font-scale));
+    object-fit: contain;
+    border-radius: calc(var(--pos-radius) - 4px);
+    background: var(--pos-surface-2);
+}
+
+/* corner affordances (quick-view lens + quick-key star): quiet glassy
+   chips that sit on the artwork without fighting it - translucent surface,
+   soft blur, sharpening fully once the card is engaged. Sizing/press state
+   inherits from .pos-quickkeys__pager-btn (template reuses that class). */
+.pos-product-card__action {
+    background: color-mix(in srgb, var(--pos-surface) 74%, transparent);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    border-color: var(--pos-border);
+    opacity: 0.85;
+    transition: opacity var(--pos-speed) var(--pos-ease),
+        background-color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press);
+}
+
+.pos-card:hover .pos-product-card__action,
+.pos-product-card:hover .pos-product-card__action,
+.pos-product-card__action:hover,
+.pos-product-card__action:focus-visible {
+    opacity: 1;
+}
+
+.pos-product-card__action:hover {
+    background: var(--pos-raised);
+    border-color: var(--pos-border-strong);
+}
+
+/* Quick-view modal hero (contract item 23): the catalog-tile cap above would
+   letterbox the modal image to a ~152px strip - lift it so the inline
+   aspect-ratio:1/1 square fills the media column (modal body scrolls). */
+.pos-product-detail__image {
+    max-height: none;
+}
+
+/* quick-view gallery thumbs: same restrained motion vocabulary as the
+   cards - 1px lift + soft shadow on hover, press-down on :active (the
+   active-thumb accent border stays template-owned via :style). */
+.pos-product-detail__thumb {
+    transition: transform var(--pos-press),
+        box-shadow var(--pos-speed) var(--pos-ease);
+}
+
+.pos-product-detail__thumb:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--pos-shadow-1);
+}
+
+.pos-product-detail__thumb:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+/* Quick-view descriptions (contract item 23): the FULL sanitized
+   description lives inside the scrollable .pos-modal__body - these
+   regions must never re-clip it (no line-clamp / max-height / hidden
+   overflow may apply here), and the x-html content gets readable
+   paragraph + list rhythm since server sanitization strips inline
+   styles. */
+.pos-product-detail__short,
+.pos-product-detail__description {
+    display: block;
+    max-height: none;
+    overflow: visible;
+    -webkit-line-clamp: none;
+    line-height: 1.5;
+}
+
+.pos-product-detail__description {
+    margin-top: var(--pos-sp-5);
+}
+
+.pos-product-detail__short p + p,
+.pos-product-detail__description p + p,
+.pos-product-detail__description p + ul,
+.pos-product-detail__description p + ol,
+.pos-product-detail__description ul + p,
+.pos-product-detail__description ol + p {
+    margin-top: var(--pos-sp-3);
+}
+
+.pos-product-detail__description ul,
+.pos-product-detail__description ol {
+    margin-top: var(--pos-sp-2);
+    padding-left: 1.25em;
+    list-style: disc outside;
+}
+
+.pos-product-detail__description ol {
+    list-style: decimal outside;
+}
+
+.pos-card__name,
+.pos-product-card__name {
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.pos-card__sku,
+.pos-product-card__sku {
+    font-size: calc(11px * var(--pos-font-scale));
+    color: var(--pos-text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+.pos-card__price,
+.pos-product-card__price {
+    margin-top: auto;
+    align-self: flex-start;
+    padding: 2px 10px;
+    border-radius: 99px;
+    background: var(--pos-accent-soft);
+    color: var(--pos-accent-ink);
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--pos-fs-sm);
+}
+
+[data-theme="dark"] .pos-card__price,
+[data-theme="dark"] .pos-product-card__price {
+    color: color-mix(in oklch, var(--pos-accent) 70%, #ffffff);
+}
+
+/* card footer (UIFIX item 36): a small vertical stack pinned to the card
+   bottom. The price row owns the full first line - "From $40.80" can never
+   be squeezed by a neighbouring affordance - and composite cards add the
+   compact Options chip as its own quiet line underneath. Simple products
+   render only the price row (price pill + struck original + sku). */
+.pos-product-card__footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--pos-sp-1);
+    width: 100%;
+    min-width: 0;
+}
+
+.pos-product-card__price-row {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-2);
+    width: 100%;
+    min-width: 0;
+}
+
+/* inside the footer stack the price pill no longer needs its own
+   bottom-pinning auto margin (the footer carries it) */
+.pos-product-card__footer .pos-card__price,
+.pos-product-card__footer .pos-product-card__price {
+    margin-top: 0;
+    align-self: center;
+    white-space: nowrap;
+}
+
+/* struck-through original price (rule/special/tier/group discount) */
+.pos-product-card__original {
+    text-decoration: line-through;
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-xs);
+    white-space: nowrap;
+}
+
+/* sku rides the right edge of the price row and ellipsizes - never wraps,
+   never pushes the pill */
+.pos-product-card__price-row .pos-card__sku,
+.pos-product-card__price-row .pos-product-card__sku {
+    margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   11. Quick keys - pastel tiles, page dots
+   ============================================================ */
+
+/* panel body wrapper (template puts .pos-quickkeys on .pos-panel__body) */
+.pos-quickkeys {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* tile grid (UIFIX item 37): same recipe as the catalog grid - auto-FILL
+   keeps empty tracks so one tile sits neatly top-left as a normal tile
+   (never a stretched billboard or a card floating mid-panel) while many
+   tiles fill the rows evenly. Top-aligned rows (align-content:start) and
+   content-sized rows guard against any flex stretching from the panel
+   body; the body itself stays the scroll region (item 9). */
+.pos-quickkeys__grid {
+    flex: 0 0 auto;
+    display: grid;
+    gap: var(--pos-gap);
+    grid-template-columns: repeat(
+        auto-fill,
+        minmax(min(calc(120px * var(--pos-btn-scale)), 100%), 1fr)
+    );
+    grid-auto-rows: max-content;
+    justify-content: start;
+    align-content: start;
+}
+
+/* tile - JS sets --tile-color (deterministic 8-color ramp, hash by id);
+   CSS turns it into a friendly pastel with readable ink */
+.pos-quickkey {
+    --tile: var(--tile-color, var(--pos-accent));
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--pos-sp-2);
+    min-height: calc(88px * var(--pos-btn-scale));
+    padding: var(--pos-sp-3);
+    cursor: pointer;
+    text-align: left;
+    border: 1px solid color-mix(in srgb, var(--tile) 38%, transparent);
+    border-radius: var(--pos-radius);
+    color: var(--pos-text);
+    background: color-mix(in srgb, var(--tile) 18%, var(--pos-surface));
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    font: inherit;
+    transition: box-shadow var(--pos-press), transform var(--pos-press),
+        filter var(--pos-speed) var(--pos-ease);
+}
+
+[data-theme="dark"] .pos-quickkey {
+    background: color-mix(in srgb, var(--tile) 26%, var(--pos-surface));
+    border-color: color-mix(in srgb, var(--tile) 45%, transparent);
+}
+
+/* hover: same restrained lift vocabulary as the product cards (item 30) -
+   1px rise + soft shadow + a touch of brightness, no scale, no reflow */
+.pos-quickkey:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-1);
+}
+
+.pos-quickkey:active {
+    filter: none;
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+/* Ghost add-tiles: muted DASHED placeholders the template renders AFTER
+   the real tiles when a page has few/zero quick keys (1-3 of them) so the
+   panel area reads as an invitation, not a blank. Same grid cell, padding
+   and min-height as a real tile - flat (no pastel wash, no shadow), tiny
+   star + "Pin a product"; tap = toast pointing at the product-card star. */
+.pos-quickkey--ghost {
+    justify-content: center;
+    align-items: center;
+    gap: var(--pos-sp-2);
+    text-align: center;
+    border: 1.5px dashed var(--pos-border-strong);
+    background: transparent;
+    box-shadow: none;
+    color: var(--pos-text-faint);
+}
+
+/* beats the (0,2,0) dark pastel recolor of the base tile */
+[data-theme="dark"] .pos-quickkey--ghost {
+    background: transparent;
+    border-color: var(--pos-border-strong);
+}
+
+.pos-quickkey--ghost .pos-icon {
+    opacity: 0.75;
+}
+
+.pos-quickkey__ghost-label {
+    font-size: var(--pos-fs-xs);
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+/* hover: a whisper of accent - an invitation, never a loud call to action */
+.pos-quickkey--ghost:hover {
+    filter: none;
+    transform: none;
+    border-color: color-mix(in srgb, var(--pos-accent) 45%, transparent);
+    background: var(--pos-accent-soft);
+    color: var(--pos-accent-ink);
+    box-shadow: none;
+}
+
+.pos-quickkey--ghost:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+/* edit chrome anchor (item 20 pencil mode): ◂ ▸ reorder + remove cluster
+   pinned to the tile corner, floating above the label/price */
+.pos-quickkey__edit {
+    position: absolute;
+    top: var(--pos-sp-1);
+    right: var(--pos-sp-1);
+    display: inline-flex;
+    gap: var(--pos-sp-1);
+    z-index: 1;
+}
+
+.pos-quickkey__label {
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-size: var(--pos-fs-md);
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.pos-quickkey__price {
+    align-self: flex-end;
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--pos-fs-sm);
+    background: color-mix(in srgb, var(--tile) 32%, var(--pos-surface));
+    border: 1px solid color-mix(in srgb, var(--tile) 28%, transparent);
+    border-radius: 999px;
+    padding: 2px 10px;
+}
+
+/* QUICK-KEY PRODUCT CARDS (UIFIX item 45): real quick-key tiles render
+   with the SAME card anatomy as the catalog product cards - image-forward
+   4:3 artwork (.pos-card__image), 2-line clamped name (.pos-card__name)
+   and the accent price pill (.pos-card__price) - so the workspace reads
+   as one product language. This modifier swaps the pastel text-box recipe
+   for the card surface and the restrained card lift (item 30 vocabulary:
+   -2px translate + shadow, never a scale). The deterministic --tile-color
+   ramp survives as a slim identity bar across the card top and as the
+   tint of the no-image fallback frame. Ghost "Pin a product" tiles keep
+   the original dashed recipe untouched. */
+.pos-quickkey--card {
+    justify-content: flex-start;
+    gap: var(--pos-sp-2);
+    padding: var(--pos-sp-2) var(--pos-sp-2) var(--pos-sp-3);
+    min-height: calc(var(--pos-control-h) * 2);
+    border: 1px solid var(--pos-border);
+    background: var(--pos-raised);
+}
+
+[data-theme="dark"] .pos-quickkey--card {
+    background: var(--pos-raised);
+    border-color: var(--pos-border);
+}
+
+/* the tile-color ramp lives on as a slim top identity bar */
+.pos-quickkey--card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: color-mix(in srgb, var(--tile) 72%, transparent);
+    pointer-events: none;
+}
+
+.pos-quickkey--card:hover {
+    filter: none;
+    border-color: var(--pos-accent);
+    transform: translateY(-2px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-2);
+}
+
+.pos-quickkey--card:active {
+    filter: none;
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+/* no-image fallback: the same 4:3 frame as .pos-card__image, washed with
+   the tile color so colour-coded keys stay recognisable at a glance */
+.pos-quickkey__image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: color-mix(in srgb, var(--tile) 55%, var(--pos-text-muted));
+    background: color-mix(in srgb, var(--tile) 14%, var(--pos-surface-2));
+}
+
+/* the price pill pins to the card bottom exactly like the catalog cards
+   (margin-top:auto comes from .pos-card__price itself) */
+.pos-quickkey--card .pos-card__name {
+    min-width: 0;
+}
+
+/* pager (panel header): ‹ dots › */
+.pos-quickkeys__pager {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.pos-quickkeys__pager-btn {
+    min-width: 36px;
+    min-height: 36px;
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font-size: var(--pos-fs-lg);
+    cursor: pointer;
+    line-height: 1;
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+    transition: transform var(--pos-press),
+        background-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-quickkeys__pager-btn:hover {
+    background: var(--pos-surface-3);
+}
+
+.pos-quickkeys__pager-btn:active {
+    transform: translateY(1px);
+}
+
+.pos-quickkeys__dot {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border-radius: 50%;
+    border: 0;
+    cursor: pointer;
+    background: var(--pos-border-strong);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-speed) var(--pos-spring);
+}
+
+.pos-quickkeys__dot--active {
+    background: var(--pos-accent);
+    transform: scale(1.25);
+}
+
+/* friendly empty state (item 37): margin:auto centers it BOTH ways inside
+   the flex-column panel body (no copy hugging the top-left corner of a
+   tall empty panel), collapsing gracefully to normal flow once the body
+   ever has to scroll. Also hosts the busy spinner. */
+.pos-quickkeys__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pos-sp-3);
+    max-width: 320px;
+    margin: auto;
+    padding: var(--pos-sp-6) var(--pos-sp-4);
+    color: var(--pos-text-muted);
+    text-align: center;
+    font-size: var(--pos-fs-sm);
+    line-height: 1.5;
+}
+
+.pos-quickkeys__empty > span:first-child {
+    font-size: 1.8rem;
+    opacity: 0.7;
+}
+
+/* specificity guard: the generic .pos-empty rule (§19, later in the file,
+   same 0-1-0 weight) re-applies margin:0 auto - this 0-2-0 descendant
+   selector keeps the quick-keys empty state (and the busy spinner) truly
+   centered in the panel body both ways (item 37). */
+.pos-quickkeys .pos-quickkeys__empty {
+    margin: auto;
+}
+
+/* ============================================================
+   12. Cart lines + totals + CHARGE
+   ============================================================ */
+
+.pos-cart-lines {
+    display: flex;
+    flex-direction: column;
+}
+
+.pos-cart-line {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-sp-3) 0;
+    border-bottom: 1px solid var(--pos-border);
+    cursor: pointer;
+    animation: pos-line-in 280ms var(--pos-spring) backwards;
+}
+
+@keyframes pos-line-in {
+    from {
+        opacity: 0;
+        transform: translateX(-14px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.pos-cart-line:last-child {
+    border-bottom: none;
+}
+
+.pos-cart-line.is-active {
+    background: var(--pos-accent-soft);
+    margin: 0 calc(-1 * var(--pos-pad));
+    padding-left: var(--pos-pad);
+    padding-right: var(--pos-pad);
+    box-shadow: inset 3px 0 0 var(--pos-accent);
+}
+
+.pos-cart-line__image {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-surface-2);
+    object-fit: contain;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--pos-fs-lg);
+}
+
+.pos-cart-line__info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.pos-cart-line__name {
+    font-weight: 600;
+    font-size: var(--pos-fs-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* UIFIX item 48: the unit-price subline must read "$45.00 × 1" - in the
+   body face, tabular-nums gives the decimal point a full figure-width
+   advance ("$45 . 00"), so the small sublines use the font's natural
+   proportional figures and explicitly zero tracking instead. (Column
+   alignment is not needed here; the row totals keep .pos-amount.) */
+.pos-cart-line__meta {
+    font-size: var(--pos-fs-xs);
+    color: var(--pos-text-muted);
+    font-variant-numeric: normal;
+    letter-spacing: normal;
+}
+
+.pos-cart-line__note {
+    font-size: var(--pos-fs-xs);
+    color: var(--pos-warning);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Chosen options under the line name (UIFIX item 39): "Size: M", bundle
+   selections, custom option values (+ price delta) as small muted rows. */
+.pos-cart-line__options {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.pos-cart-line__option {
+    font-size: var(--pos-fs-xs);
+    color: var(--pos-text-muted);
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Same option rows echoed at the top of the line-item modal. */
+.pos-cart-line__options--modal {
+    gap: var(--pos-sp-1);
+    padding: var(--pos-sp-2) var(--pos-sp-3);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-accent-soft);
+}
+
+.pos-cart-line__options--modal .pos-cart-line__option {
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text);
+    white-space: normal;
+}
+
+.pos-cart-line__qty {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-1);
+}
+
+.pos-cart-line__total {
+    flex: 0 0 auto;
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    min-width: 72px;
+}
+
+.pos-cart-line__discount {
+    display: block;
+    font-size: calc(11px * var(--pos-font-scale));
+    font-weight: 600;
+    color: var(--pos-success-ink);
+}
+
+/* item 48 (continued): every SMALL price subline in a cart line - unit
+   price × qty, option price deltas, the per-line saving - renders with
+   proportional figures and no tracking so decimals never gap open. The
+   later position in the file lets this 0-1-0 rule beat .pos-amount's
+   tabular-nums/letter-spacing on the tiny discount subline. */
+.pos-cart-line__meta,
+.pos-cart-line__option,
+.pos-cart-line__discount {
+    font-variant-numeric: normal;
+    letter-spacing: normal;
+}
+
+/* legacy alias of .pos-stepper__btn - kept in lockstep (UIFIX item 22) */
+.pos-qty-btn {
+    width: max(44px, calc(var(--pos-control-h) - 10px));
+    height: max(44px, calc(var(--pos-control-h) - 10px));
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    font-size: var(--pos-fs-lg);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+}
+
+/* totals table - money is the typographic hero */
+.pos-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pos-totals__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+}
+
+.pos-totals__row--discount {
+    color: var(--pos-success-ink);
+}
+
+.pos-totals__row--grand {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-lg);
+    font-weight: 800;
+    color: var(--pos-text);
+    padding-top: 8px;
+    margin-top: 6px;
+    border-top: 2px solid var(--pos-border-strong);
+}
+
+.pos-totals__row--grand .pos-amount {
+    font-size: var(--pos-fs-3xl);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    animation: pos-amount-settle 300ms var(--pos-spring);
+}
+
+@keyframes pos-amount-settle {
+    from {
+        transform: scale(0.97);
+    }
+    to {
+        transform: scale(1);
+    }
+}
+
+/* CHARGE - breathing glow while a sale is chargeable; honest when disabled */
+.pos-panel--cart .pos-panel__footer .pos-btn--lg.pos-btn--primary:not(:disabled) {
+    animation: pos-breathe 3s ease-in-out infinite;
+}
+
+@keyframes pos-breathe {
+    0%,
+    100% {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25),
+            0 2px 8px var(--pos-accent-glow);
+    }
+    50% {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25),
+            0 4px 26px 3px var(--pos-accent-glow);
+    }
+}
+
+.pos-panel--cart .pos-panel__footer .pos-btn--lg.pos-btn--primary:disabled {
+    background: var(--pos-surface-3);
+    border-color: var(--pos-border);
+    color: var(--pos-text-faint);
+    box-shadow: none;
+    animation: none;
+}
+
+/* ============================================================
+   13. Keypad - chunky terminal keys (≥64px)
+   ============================================================ */
+
+/* keypad: ONE gap value drives both the row and column gutter, so keys
+   are evenly spaced on both axes (UIFIX item 14 "uniform keypad gaps
+   both axes"). */
+.pos-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    row-gap: var(--pos-gap);
+    column-gap: var(--pos-gap);
+}
+
+.pos-keypad__key {
+    min-height: var(--pos-key-h);
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight),
+        0 2px 0 var(--pos-border-strong), var(--pos-shadow-press);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press), box-shadow var(--pos-press);
+}
+
+.pos-keypad__key:hover {
+    background: var(--pos-surface-2);
+}
+
+.pos-keypad__key:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+    background: var(--pos-accent-soft);
+}
+
+.pos-keypad__key--action,
+.pos-keypad__key--fn {
+    font-family: var(--pos-font-body);
+    font-size: var(--pos-fs-md);
+    font-weight: 700;
+    color: var(--pos-text-muted);
+    background: var(--pos-surface-2);
+}
+
+.pos-keypad__key--confirm {
+    background: linear-gradient(
+        180deg,
+        var(--pos-accent-active),
+        var(--pos-accent-fill-deep) 55%
+    );
+    border-color: var(--pos-accent-fill-press);
+    color: var(--pos-accent-contrast);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        0 2px 0 var(--pos-accent-pressed);
+}
+
+.pos-keypad__key--confirm:hover {
+    background: var(--pos-accent-active);
+}
+
+.pos-keypad__key--confirm:active {
+    background: var(--pos-accent-fill-press);
+}
+
+.pos-keypad__key--wide {
+    grid-column: 1 / -1;
+}
+
+.pos-keypad__display {
+    min-height: calc(var(--pos-control-h) + 10px);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: var(--pos-sp-2) var(--pos-sp-4);
+    margin-bottom: var(--pos-gap);
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-surface-2);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-2xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    overflow: hidden;
+}
+
+.pos-keypad__display--pin {
+    justify-content: center;
+    letter-spacing: 0.4em;
+}
+
+/* item / custom-item modal rhythm (items 14 + 32): the segmented tabs
+   (.pos-denominations target buttons or .pos-segment), the value display +
+   keypad (grouped as .pos-keypad-block), the qty stepper and the inputs are
+   ALL separated by one consistent --pos-sp-4 beat. A control following a
+   keypad (e.g. the "Line note" field) or a name field followed by the
+   Price/Qty tabs (Custom Item) must never hug its neighbour. The x-show
+   chains (stepper/segment) collapse to display:none, so every link in the
+   sibling chain carries the same margin and the visible gap stays sp-4
+   whichever target is active. */
+.pos-keypad + .pos-field,
+.pos-keypad + .pos-section-title,
+.pos-keypad + .pos-textarea,
+.pos-keypad + .pos-input,
+.pos-segment + .pos-keypad,
+.pos-keypad__display + .pos-segment,
+.pos-keypad-block + .pos-field,
+.pos-keypad-block + .pos-section-title,
+.pos-modal__body > .pos-field + .pos-denominations,
+.pos-modal__body > .pos-denominations + .pos-stepper,
+.pos-modal__body > .pos-denominations + .pos-segment,
+.pos-modal__body > .pos-denominations + .pos-keypad-block,
+.pos-modal__body > .pos-stepper + .pos-segment,
+.pos-modal__body > .pos-stepper + .pos-keypad-block,
+.pos-modal__body > .pos-segment + .pos-keypad-block,
+.pos-modal__body > .pos-segment + div {
+    margin-top: var(--pos-sp-4);
+}
+
+/* ============================================================
+   14. Modals - blur backdrop, scale-in dialog
+   ============================================================ */
+
+.pos-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(8, 10, 14, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 200;
+    animation: pos-fade-in var(--pos-speed) var(--pos-ease);
+}
+
+@keyframes pos-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.pos-modal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 640px;
+    max-height: 85vh;
+    max-height: 85dvh;
+    background: var(--pos-surface);
+    color: var(--pos-text);
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius-lg);
+    box-shadow: var(--pos-shadow-3);
+    overflow: hidden;
+    animation: pos-modal-in 160ms var(--pos-spring);
+}
+
+@keyframes pos-modal-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.pos-modal--sm {
+    max-width: 420px;
+}
+
+.pos-modal--md {
+    max-width: 640px;
+}
+
+.pos-modal--lg {
+    max-width: 920px;
+}
+
+/* Modal header / body / footer share the SAME horizontal padding
+   (--pos-sp-5) so the title's x-offset == body content x-offset ==
+   footer buttons' right inset - every edge aligns (UIFIX item 14). */
+.pos-modal__header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-pad) var(--pos-sp-5);
+    border-bottom: 1px solid var(--pos-border);
+}
+
+.pos-modal__title {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.pos-modal__close {
+    margin-left: auto;
+    width: var(--pos-control-h);
+    height: var(--pos-control-h);
+    flex: 0 0 auto;
+    border: none;
+    border-radius: var(--pos-radius-sm);
+    background: transparent;
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-xl);
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-modal__close:hover {
+    background: var(--pos-surface-3);
+    color: var(--pos-text);
+}
+
+.pos-modal__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--pos-sp-5);
+}
+
+/* Vertical rhythm between body sections = --pos-sp-5 (item 14). Scoped to
+   sibling FIELDS / ROWS so it never doubles up with components that own
+   their margins (.pos-section-title, .pos-kv, .pos-form-grid). A field
+   following another control keeps the tighter --pos-sp-4 (control->label)
+   rhythm; otherwise sections breathe at --pos-sp-5. */
+.pos-modal__body > .pos-field + .pos-field,
+.pos-modal__body > .pos-row + .pos-field,
+.pos-modal__body > .pos-field + .pos-row {
+    margin-top: var(--pos-sp-4);
+}
+
+.pos-modal__body > .pos-row + .pos-row {
+    margin-top: var(--pos-sp-5);
+}
+
+.pos-modal__footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-pad) var(--pos-sp-5);
+    border-top: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+}
+
+/* ============================================================
+   15. Settings rows
+   ============================================================ */
+
+.pos-settings__section {
+    margin-bottom: var(--pos-sp-6);
+}
+
+.pos-settings__section:last-child {
+    margin-bottom: 0;
+}
+
+.pos-settings__heading {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--pos-text-faint);
+    margin-bottom: var(--pos-sp-2);
+}
+
+.pos-settings__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pos-sp-4);
+    padding: var(--pos-sp-2) 0;
+    border-bottom: 1px solid var(--pos-border);
+}
+
+.pos-settings__row:last-child {
+    border-bottom: none;
+}
+
+.pos-settings__label {
+    font-weight: 600;
+    flex: 0 0 auto;
+}
+
+.pos-settings__hint {
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+    margin-top: 2px;
+    font-weight: 400;
+}
+
+.pos-settings__control {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.pos-settings__value {
+    min-width: 52px;
+    text-align: right;
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--pos-accent-ink);
+}
+
+[data-theme="dark"] .pos-settings__value {
+    color: color-mix(in oklch, var(--pos-accent) 70%, #ffffff);
+}
+
+/* ============================================================
+   16. Layout editor toolbar (modal-layout.phtml)
+   ============================================================ */
+
+.pos-layout-toolbar {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 220;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pos-sp-4);
+    max-width: min(96vw, 1100px);
+    padding: var(--pos-sp-3) var(--pos-sp-4);
+    background: color-mix(in srgb, var(--pos-surface) 92%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--pos-border-strong);
+    border-radius: var(--pos-radius-lg);
+    box-shadow: var(--pos-shadow-3);
+    animation: pos-toolbar-in 200ms var(--pos-spring);
+}
+
+@keyframes pos-toolbar-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 14px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.pos-layout-toolbar__group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pos-sp-2);
+}
+
+.pos-layout-toolbar__group--grow {
+    flex: 1 1 auto;
+}
+
+.pos-layout-toolbar__label {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--pos-text-faint);
+    margin-right: 2px;
+}
+
+.pos-layout-toolbar__hint {
+    flex-basis: 100%;
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+}
+
+.pos-layout-toolbar__divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--pos-border-strong);
+}
+
+.pos-layout-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: calc(var(--pos-control-h) - 10px);
+    padding: 4px 12px;
+    border: 1px solid var(--pos-border-strong);
+    border-radius: 99px;
+    background: var(--pos-raised);
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    color: var(--pos-text-muted);
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-layout-check:has(input:checked) {
+    background: var(--pos-accent-soft);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-ink);
+}
+
+[data-theme="dark"] .pos-layout-check:has(input:checked) {
+    color: color-mix(in oklch, var(--pos-accent) 70%, #ffffff);
+}
+
+.pos-layout-check input {
+    accent-color: var(--pos-accent);
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+/* ============================================================
+   17. Toasts - accent edge, icon slot, BELOW the header
+   ============================================================ */
+
+.pos-toasts {
+    position: fixed;
+    top: calc(var(--pos-header-h) + var(--pos-sp-2));
+    right: var(--pos-sp-4);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-2);
+    max-width: min(92vw, 380px);
+    pointer-events: none;
+}
+
+.pos-toast {
+    --toast-edge: var(--pos-info);
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-sp-3) var(--pos-sp-4);
+    border-radius: var(--pos-radius);
+    border: 1px solid var(--pos-border-strong);
+    border-left: 4px solid var(--toast-edge);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-2);
+    animation: pos-toast-in 220ms var(--pos-spring);
+}
+
+.pos-toast::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--toast-edge);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--toast-edge) 60%, transparent);
+}
+
+@keyframes pos-toast-in {
+    from {
+        opacity: 0;
+        transform: translateX(20px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.pos-toast--success {
+    --toast-edge: var(--pos-success);
+}
+
+.pos-toast--error,
+.pos-toast--danger {
+    --toast-edge: var(--pos-danger);
+}
+
+.pos-toast--warning {
+    --toast-edge: var(--pos-warning);
+}
+
+.pos-toast--info {
+    --toast-edge: var(--pos-info);
+}
+
+/* ============================================================
+   18. Login screen / PIN lock - hero treatment
+   ============================================================ */
+
+.pos-login {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background-color: var(--pos-bg);
+    background-image: radial-gradient(
+            ellipse 70% 55% at 50% -8%,
+            var(--pos-accent-soft-2),
+            transparent 60%
+        ),
+        var(--pos-canvas-glow), var(--pos-noise);
+    z-index: 150;
+    overflow-y: auto;
+}
+
+.pos-login__card {
+    width: 100%;
+    max-width: 420px;
+    padding: 34px 30px 24px;
+    background: var(--pos-surface);
+    border: 1px solid var(--pos-border-strong);
+    border-radius: calc(var(--pos-radius-lg) + 4px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-3);
+    animation: pos-rise 480ms var(--pos-spring) backwards;
+}
+
+.pos-login__brand {
+    text-align: center;
+    margin-bottom: 26px;
+}
+
+.pos-login__store {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-3xl);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.pos-login__subtitle {
+    margin-top: 6px;
+    color: var(--pos-accent-ink);
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+}
+
+.pos-login__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-4);
+}
+
+.pos-login__hint {
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+}
+
+.pos-login__error {
+    padding: 10px 14px;
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-danger-soft);
+    border: 1px solid color-mix(in srgb, var(--pos-danger) 35%, transparent);
+    color: var(--pos-danger-ink);
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    animation: pos-shake 320ms var(--pos-ease);
+}
+
+@keyframes pos-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-3px); }
+}
+
+.pos-login__pin {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-3);
+}
+
+.pos-login__locked-title {
+    text-align: center;
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 700;
+}
+
+.pos-login__locked-user {
+    text-align: center;
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-sm);
+}
+
+.pos-login__footer {
+    margin-top: 18px;
+    text-align: center;
+}
+
+/* ============================================================
+   19. Lists, empty states, misc shared widgets
+   ============================================================ */
+
+/* friendly centered empty state (inline-SVG doodle + warm copy) */
+.pos-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pos-sp-3);
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    padding: var(--pos-sp-8) var(--pos-sp-4);
+    color: var(--pos-text-faint);
+    text-align: center;
+    font-size: var(--pos-fs-sm);
+    line-height: 1.5;
+}
+
+.pos-empty__icon {
+    font-size: calc(32px * var(--pos-font-scale));
+    line-height: 1;
+    opacity: 0.8;
+    color: var(--pos-accent);
+}
+
+.pos-empty__icon .pos-icon,
+.pos-empty__icon svg {
+    width: calc(56px * var(--pos-font-scale));
+    height: calc(56px * var(--pos-font-scale));
+    stroke-width: 1.5;
+}
+
+.pos-empty__text {
+    color: var(--pos-text-muted);
+    font-weight: 500;
+}
+
+.pos-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.pos-list__item {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    min-height: var(--pos-control-h);
+    padding: var(--pos-sp-2) var(--pos-sp-3);
+    border-bottom: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius-sm);
+    cursor: pointer;
+    transition: background-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-list__item:last-child {
+    border-bottom: none;
+}
+
+.pos-list__item:hover {
+    background: var(--pos-surface-2);
+}
+
+.pos-list__item--selected,
+.pos-list__item--selected:hover {
+    background: var(--pos-accent-soft);
+    box-shadow: inset 0 0 0 1px var(--pos-accent);
+}
+
+.pos-list__item--disabled,
+.pos-list__item.is-disabled {
+    opacity: 0.55;
+}
+
+.pos-list__item-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.pos-list__item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.pos-list__item-info > * {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* register confirm option (session-open modal) - radio dot */
+.pos-register-option {
+    border: 1px solid var(--pos-border);
+    margin-bottom: var(--pos-sp-2);
+    border-radius: var(--pos-radius);
+    background: var(--pos-raised);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+.pos-register-option__radio {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--pos-border-strong);
+    background: var(--pos-surface);
+    transition: border-color var(--pos-speed) var(--pos-ease),
+        box-shadow var(--pos-speed) var(--pos-ease);
+}
+
+.pos-list__item--selected .pos-register-option__radio {
+    border-color: var(--pos-accent);
+    box-shadow: inset 0 0 0 5px var(--pos-accent);
+}
+
+/* generic horizontal row of controls */
+.pos-row {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    flex-wrap: wrap;
+}
+
+.pos-row--stack {
+    margin-top: var(--pos-sp-3);
+}
+
+.pos-row .pos-input,
+.pos-row .pos-select {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+
+.pos-row .pos-section-title {
+    margin: 0 auto 0 0;
+}
+
+/* key/value summary (refund totals, receipt meta, session KPIs) */
+.pos-kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--pos-sp-2) var(--pos-sp-4);
+    margin: var(--pos-sp-3) 0;
+    padding: var(--pos-sp-3) var(--pos-sp-4);
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius);
+    background: var(--pos-surface-2);
+}
+
+.pos-kv dt {
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+}
+
+.pos-kv dd {
+    margin: 0;
+    text-align: right;
+    font-family: var(--pos-font-display);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* KPI chip (session panel headline figures) - min() so a KPI can never be
+   wider than a shrunken session block (UIFIX item 25 reflow) */
+.pos-kpi {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--pos-sp-3) var(--pos-sp-4);
+    border-radius: var(--pos-radius);
+    border: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+    min-width: min(120px, 100%);
+    max-width: 100%;
+}
+
+.pos-kpi__value,
+.pos-kpi__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pos-kpi__label {
+    font-size: calc(11px * var(--pos-font-scale));
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--pos-text-muted);
+}
+
+.pos-kpi__value {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* two-column form grid (customer create) */
+.pos-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--pos-sp-3);
+    margin-top: var(--pos-sp-3);
+    padding: var(--pos-sp-4);
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius);
+    background: var(--pos-surface-2);
+}
+
+.pos-form-grid .pos-form-grid__full,
+.pos-form-grid .pos-form-submit {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 560px) {
+    .pos-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* denomination / action shortcut rows */
+.pos-denominations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pos-sp-2);
+}
+
+.pos-denominations .pos-btn {
+    flex: 1 1 auto;
+}
+
+/* split payment row (refund modal) */
+.pos-payment-row {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-sp-2) 0;
+}
+
+.pos-payment-row .pos-select {
+    flex: 1 1 50%;
+}
+
+.pos-payment-row .pos-input {
+    flex: 1 1 30%;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.pos-payment-row input[type="text"].pos-input {
+    text-align: left;
+}
+
+/* QR container (online payments / receipt) */
+.pos-qr {
+    display: flex;
+    justify-content: center;
+    padding: 14px;
+    background: #fff;
+    border-radius: var(--pos-radius-sm);
+    box-shadow: var(--pos-shadow-1);
+}
+
+/* ============================================================
+   20. Checkout modal (modal-checkout.phtml)
+   ============================================================ */
+
+.pos-checkout {
+    position: fixed;
+    inset: 0;
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    background: rgba(8, 10, 14, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: pos-fade-in var(--pos-speed) var(--pos-ease);
+}
+
+.pos-checkout__box {
+    display: flex;
+    flex-direction: column;
+    width: min(96vw, 880px);
+    max-height: 85vh;
+    max-height: 85dvh;
+    min-height: 0;
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius-lg);
+    background: var(--pos-surface);
+    color: var(--pos-text);
+    box-shadow: var(--pos-shadow-3);
+    overflow: hidden;
+    animation: pos-modal-in 160ms var(--pos-spring);
+}
+
+/* pay view: header + live strip fixed, columns scroll, footer fixed */
+.pos-checkout__pay {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* checkout header/live/columns/footer share --pos-sp-5 horizontal
+   padding so every edge aligns, matching the modal chrome (item 14). */
+.pos-checkout__header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-4);
+    padding: var(--pos-pad) var(--pos-sp-5);
+    border-bottom: 1px solid var(--pos-border);
+}
+
+.pos-checkout__title {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+.pos-checkout__due {
+    margin-left: auto;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.pos-checkout__due-label {
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.pos-checkout__due-value {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-3xl);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+.pos-checkout__close {
+    min-width: var(--pos-control-h);
+    min-height: var(--pos-control-h);
+    border: none;
+    background: transparent;
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-lg);
+    cursor: pointer;
+    border-radius: var(--pos-radius-sm);
+    transition: background-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-checkout__close:hover:not(:disabled) {
+    background: var(--pos-surface-3);
+    color: var(--pos-text);
+}
+
+/* live KPI strip */
+.pos-checkout__live {
+    flex: 0 0 auto;
+    display: flex;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-sp-3) var(--pos-sp-5) 0;
+}
+
+.pos-checkout__live-item {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 16px;
+    border-radius: var(--pos-radius);
+    border: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+    min-width: 130px;
+}
+
+.pos-checkout__live-item small {
+    color: var(--pos-text-muted);
+    font-size: calc(11px * var(--pos-font-scale));
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.pos-checkout__live-item strong {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-2xl);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+}
+
+.pos-checkout__live-item--warn strong {
+    color: var(--pos-danger-ink);
+}
+
+.pos-checkout__live-item--ok strong {
+    color: var(--pos-success-ink);
+}
+
+.pos-checkout__columns {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    align-items: start;
+    gap: var(--pos-sp-4);
+    padding: var(--pos-sp-4) var(--pos-sp-5);
+}
+
+.pos-checkout__left {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* payment method tiles */
+.pos-checkout__methods {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 8px;
+}
+
+.pos-method {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: calc(68px * var(--pos-btn-scale));
+    cursor: pointer;
+    border-radius: var(--pos-radius);
+    border: 1px solid var(--pos-border-strong);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: transform var(--pos-press), box-shadow var(--pos-press),
+        border-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-method:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+.pos-method:hover {
+    border-color: var(--pos-accent);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-1);
+}
+
+.pos-method__icon {
+    font-size: var(--pos-fs-2xl);
+    color: var(--pos-accent);
+    line-height: 1;
+}
+
+.pos-method__icon .pos-icon {
+    width: 26px;
+    height: 26px;
+}
+
+.pos-method__title {
+    font-weight: 700;
+    font-size: var(--pos-fs-sm);
+    text-align: center;
+    padding: 0 4px;
+}
+
+.pos-checkout__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pos-checkout__rows-empty {
+    margin: 0;
+    color: var(--pos-text-muted);
+    text-align: center;
+    padding: 14px 0;
+}
+
+/* an added payment row */
+.pos-payrow {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: var(--pos-radius);
+    border: 1px solid var(--pos-border-strong);
+    background: var(--pos-surface-2);
+    animation: pos-line-in 240ms var(--pos-spring) backwards;
+}
+
+.pos-payrow--active {
+    border-color: var(--pos-accent);
+    background: var(--pos-raised);
+    box-shadow: 0 0 0 3px var(--pos-accent-soft);
+}
+
+.pos-payrow__top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pos-payrow__method {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+}
+
+.pos-payrow__amount {
+    margin-left: auto;
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-2xl);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+}
+
+.pos-payrow__remove {
+    min-width: 40px;
+    min-height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--pos-danger-ink);
+    cursor: pointer;
+    font-size: var(--pos-fs-md);
+    border-radius: var(--pos-radius-sm);
+}
+
+.pos-payrow__remove:hover {
+    background: var(--pos-danger-soft);
+}
+
+.pos-payrow__reference {
+    width: 100%;
+}
+
+.pos-payrow__instructions {
+    margin: 0;
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+}
+
+.pos-payrow__tender {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* cash tender shortcut buttons */
+.pos-tender {
+    min-height: calc(var(--pos-control-h) + 2px);
+    min-width: 56px;
+    padding: 0 12px;
+    cursor: pointer;
+    border-radius: var(--pos-radius-sm);
+    border: 1px solid var(--pos-border-strong);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    font-family: var(--pos-font-display);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: transform var(--pos-press), box-shadow var(--pos-press),
+        border-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-tender:hover {
+    border-color: var(--pos-accent);
+}
+
+.pos-tender:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+.pos-tender--exact {
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-ink);
+    background: var(--pos-accent-soft);
+}
+
+[data-theme="dark"] .pos-tender--exact {
+    color: color-mix(in oklch, var(--pos-accent) 70%, #ffffff);
+}
+
+.pos-tender--denom {
+    background: var(--pos-surface-2);
+}
+
+.pos-checkout__email {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-weight: 600;
+    font-size: var(--pos-fs-sm);
+}
+
+.pos-checkout__email input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+    accent-color: var(--pos-accent);
+}
+
+.pos-checkout__email .pos-input {
+    flex: 1 1 220px;
+}
+
+.pos-checkout__right {
+    display: flex;
+    flex-direction: column;
+}
+
+.pos-checkout__keypad {
+    position: sticky;
+    top: 0;
+}
+
+.pos-checkout__footer {
+    flex: 0 0 auto;
+    display: flex;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-pad) var(--pos-sp-5);
+    border-top: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+}
+
+/* PLACE ORDER - success tactile slab */
+.pos-checkout__place {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: calc(64px * var(--pos-btn-scale));
+    cursor: pointer;
+    border: none;
+    border-radius: var(--pos-radius);
+    background: linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--pos-success) 88%, #ffffff),
+        var(--pos-success) 55%
+    );
+    color: #06281a;
+    font: inherit;
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 2px 10px color-mix(in srgb, var(--pos-success) 35%, transparent);
+    transition: transform var(--pos-press), box-shadow var(--pos-press);
+}
+
+.pos-checkout__place:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.pos-checkout__place:disabled {
+    background: var(--pos-surface-3);
+    color: var(--pos-text-faint);
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.pos-checkout__place-sub {
+    font-family: var(--pos-font-body);
+    font-size: var(--pos-fs-xs);
+    font-weight: 600;
+    opacity: 0.85;
+    letter-spacing: 0;
+}
+
+/* done view */
+.pos-checkout__done {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 26px 22px;
+    align-items: center;
+    text-align: center;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+}
+
+.pos-checkout__done-head h2 {
+    margin: 6px 0 2px;
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-2xl);
+}
+
+.pos-checkout__check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: var(--pos-success);
+    color: #06281a;
+    font-size: 2rem;
+    box-shadow: 0 0 0 8px var(--pos-success-soft),
+        0 6px 18px color-mix(in srgb, var(--pos-success) 40%, transparent);
+    animation: pos-check-pop 460ms var(--pos-spring) backwards;
+}
+
+@keyframes pos-check-pop {
+    0% {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    70% {
+        transform: scale(1.08);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.pos-checkout__done-meta {
+    margin: 0;
+    color: var(--pos-text-muted);
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.pos-checkout__change {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 32px;
+    border-radius: var(--pos-radius);
+    border: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+}
+
+.pos-checkout__change small {
+    color: var(--pos-text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.pos-checkout__change strong {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-3xl);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: var(--pos-success-ink);
+}
+
+.pos-checkout__online {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.pos-checkout__online-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px;
+    border-radius: var(--pos-radius);
+    border: 2px dashed var(--pos-border-strong);
+}
+
+.pos-checkout__online-title {
+    margin: 0;
+    font-weight: 700;
+}
+
+.pos-checkout__qr {
+    min-width: 168px;
+    min-height: 168px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    padding: 8px;
+    border-radius: var(--pos-radius-sm);
+    box-shadow: var(--pos-shadow-1);
+}
+
+.pos-checkout__online-link,
+.pos-qr-fallback {
+    font-size: var(--pos-fs-sm);
+    word-break: break-all;
+    color: var(--pos-info);
+    /* item 38: one tap selects the whole payment URL for copying */
+    -webkit-user-select: all;
+    user-select: all;
+}
+
+.pos-checkout__online-pending {
+    margin: 0;
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+}
+
+/* UIFIX item 38 - online payment row anatomy */
+.pos-checkout__online-amount {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--pos-sp-2);
+}
+
+.pos-checkout__online-amount small {
+    font-size: var(--pos-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pos-warning);
+}
+
+.pos-checkout__online-amount strong {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-lg);
+}
+
+.pos-checkout__online-scan {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--pos-sp-2);
+    width: 100%;
+}
+
+.pos-checkout__online-hint {
+    margin: 0;
+    font-size: var(--pos-fs-sm);
+    color: var(--pos-text-muted);
+}
+
+/* No payment_url_template configured: instructions / Admin hint replace the
+   QR box entirely - the dashed row never renders empty. */
+.pos-checkout__online-instructions {
+    margin: 0;
+    max-width: 420px;
+    font-size: var(--pos-fs-sm);
+    line-height: 1.5;
+    color: var(--pos-text-muted);
+    text-align: center;
+    white-space: pre-line;
+}
+
+.pos-checkout__emailed {
+    margin: 0;
+    display: flex;
+    gap: 8px;
+    color: var(--pos-text-muted);
+}
+
+.pos-checkout__done-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(100%, 380px);
+}
+
+.pos-checkout__done-btn {
+    width: 100%;
+}
+
+.pos-checkout__newsale {
+    min-height: calc(64px * var(--pos-btn-scale));
+    cursor: pointer;
+    border: none;
+    border-radius: var(--pos-radius);
+    background: linear-gradient(
+        180deg,
+        var(--pos-accent-active),
+        var(--pos-accent-fill-deep) 55%
+    );
+    color: var(--pos-accent-contrast);
+    font: inherit;
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-lg);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        0 2px 10px var(--pos-accent-glow);
+    transition: transform var(--pos-press), box-shadow var(--pos-press);
+}
+
+.pos-checkout__newsale:hover {
+    background: var(--pos-accent-active);
+}
+
+.pos-checkout__newsale:active {
+    background: var(--pos-accent-fill-press);
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+@media (max-width: 760px) {
+    .pos-checkout__columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================
+   21. Receipt modal - the paper ticket (delight moment)
+   ============================================================ */
+
+.pos-receipt-modal {
+    position: fixed;
+    inset: 0;
+    /* z-scale: modal 200 < checkout 210 < layout toolbar 220 < receipt 240
+       < toasts 300 - the post-sale paper ticket must cover the checkout
+       dialog when pos:receipt-show fires while checkout is still open. */
+    z-index: 240;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(8, 10, 14, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: pos-fade-in var(--pos-speed) var(--pos-ease);
+}
+
+.pos-receipt-modal__box {
+    display: flex;
+    flex-direction: column;
+    width: min(94vw, 430px);
+    max-height: 85vh;
+    max-height: 85dvh;
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius-lg);
+    background: var(--pos-surface);
+    color: var(--pos-text);
+    box-shadow: var(--pos-shadow-3);
+    overflow: hidden;
+    animation: pos-modal-in 160ms var(--pos-spring);
+}
+
+.pos-receipt-modal__header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--pos-pad) var(--pos-sp-5);
+    border-bottom: 1px solid var(--pos-border);
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 700;
+}
+
+.pos-receipt-modal__close {
+    min-width: var(--pos-control-h);
+    min-height: var(--pos-control-h);
+    border: none;
+    background: transparent;
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-lg);
+    cursor: pointer;
+    border-radius: var(--pos-radius-sm);
+    transition: background-color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-receipt-modal__close:hover {
+    background: var(--pos-surface-3);
+    color: var(--pos-text);
+}
+
+.pos-receipt-modal__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--pos-sp-5);
+}
+
+/* paper-textured ticket: warm grain, perforated bottom edge, slight tilt */
+.pos-receipt-modal__ticket {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 18px 16px 26px;
+    background-color: #fdfbf5;
+    background-image: var(--pos-noise);
+    color: #1c1b1a;
+    border-radius: 6px 6px 0 0;
+    box-shadow: var(--pos-shadow-2);
+    transform: rotate(-0.5deg);
+    -webkit-mask-image: radial-gradient(circle 7px at 10px 100%, transparent 98%, #000),
+        linear-gradient(#000, #000);
+    -webkit-mask-size: 20px 14px, 100% calc(100% - 13px);
+    -webkit-mask-position: 0 bottom, 0 0;
+    -webkit-mask-repeat: repeat-x, no-repeat;
+    mask-image: radial-gradient(circle 7px at 10px 100%, transparent 98%, #000),
+        linear-gradient(#000, #000);
+    mask-size: 20px 14px, 100% calc(100% - 13px);
+    mask-position: 0 bottom, 0 0;
+    mask-repeat: repeat-x, no-repeat;
+}
+
+[data-theme="dark"] .pos-receipt-modal__ticket {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.pos-receipt-modal__icon {
+    font-size: 2.2rem;
+    line-height: 1;
+    color: var(--pos-accent);
+}
+
+.pos-receipt-modal__icon .pos-icon {
+    width: 36px;
+    height: 36px;
+}
+
+.pos-receipt-modal__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    flex: 1 1 auto;
+}
+
+.pos-receipt-modal__meta > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.pos-receipt-modal__meta dt {
+    color: #6e6a63;
+    font-size: var(--pos-fs-sm);
+    margin: 0;
+}
+
+.pos-receipt-modal__meta dd {
+    margin: 0;
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+/* hero figure on the ticket (applier may add to the grand-total row) */
+.pos-receipt-modal__total,
+.pos-receipt-modal__meta .pos-receipt-modal__total dd,
+dd.pos-receipt-modal__total {
+    font-size: var(--pos-fs-4xl);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+}
+
+.pos-receipt-modal__empty {
+    margin: 0;
+    text-align: center;
+    color: var(--pos-text-muted);
+    padding: 10px 0;
+}
+
+.pos-receipt-modal__footer {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-pad) var(--pos-sp-5);
+    border-top: 1px solid var(--pos-border);
+    background: var(--pos-surface-2);
+}
+
+.pos-receipt-modal__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: calc(52px * var(--pos-btn-scale));
+    cursor: pointer;
+    border-radius: var(--pos-radius-sm);
+    border: 1px solid transparent;
+    font: inherit;
+    font-weight: 700;
+    font-size: var(--pos-fs-sm);
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: transform var(--pos-press), box-shadow var(--pos-press);
+}
+
+.pos-receipt-modal__btn:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--pos-highlight);
+}
+
+.pos-receipt-modal__btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.pos-receipt-modal__btn--ghost {
+    background: var(--pos-raised);
+    border-color: var(--pos-border-strong);
+    color: var(--pos-text);
+}
+
+.pos-receipt-modal__btn--primary {
+    background: var(--pos-success);
+    border-color: color-mix(in srgb, var(--pos-success) 80%, #000);
+    color: #06281a;
+}
+
+.pos-receipt-modal__btn--accent {
+    background: linear-gradient(
+        180deg,
+        var(--pos-accent-active),
+        var(--pos-accent-fill-deep) 55%
+    );
+    border-color: var(--pos-accent-fill-press);
+    color: var(--pos-accent-contrast);
+}
+
+/* ============================================================
+   21b. Per-panel modifiers (scroll-model hooks)
+   ============================================================ */
+
+/* Panel bodies that stack fixed chrome above a scrolling region become
+   flex columns; the body itself still owns the scrollbar. */
+.pos-panel--catalog .pos-panel__body,
+.pos-panel--cart .pos-panel__body,
+.pos-panel--quickkeys .pos-panel__body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* catalog: search + chips pinned, product grid is the growing region */
+.pos-panel--catalog .pos-search {
+    flex: 0 0 auto;
+}
+
+.pos-panel--catalog .pos-product-grid {
+    flex: 0 0 auto;
+}
+
+/* cart: lines grow inside the scrolling body; totals/CHARGE live in the
+   pinned .pos-panel__footer */
+.pos-panel--cart .pos-cart-lines {
+    flex: 0 0 auto;
+}
+
+.pos-panel--cart .pos-empty {
+    margin: auto;
+}
+
+/* customer / holds / session panels: plain scrolling bodies (hooks kept
+   so the BEM modifiers always resolve) */
+.pos-panel--customer,
+.pos-panel--holds,
+.pos-panel--session {
+    position: relative;
+}
+
+/* ============================================================
+   21c. Movable blocks (UIFIX item 18) - toolbar + cart sub-blocks
+   ============================================================
+   Item 18 promotes the header action cluster and the cart's three
+   regions to first-class draggable .pos-panel blocks so they can be
+   placed anywhere on the grid. Each renders as a normal panel (drag
+   header + SE resize + grid-snap + ghosting all inherited) with these
+   modifiers carrying the layout-specific chrome. The layout owner adds
+   the data-panel + modifier; this file only styles them. */
+
+/* TOOLBAR block - the header action cluster relocated onto the grid.
+   It holds icon buttons in a flowing, wrapping row; the body is flush so
+   the buttons reach the panel edge consistently with the gutter token. */
+.pos-panel--toolbar .pos-panel__body {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: var(--pos-sp-2);
+    padding: var(--pos-pad);
+}
+
+/* item 26a: a sane wrap basis so the icon+label buttons form clean rows
+   (never one cramped strip) and can shrink - labels ellipsize via
+   .pos-btn__label - instead of overflowing a narrow toolbar block. */
+.pos-panel--toolbar .pos-btn {
+    flex: 1 1 calc(96px * var(--pos-btn-scale));
+    min-width: 0;
+}
+
+/* CART sub-blocks share the cart panel's scroll-model behaviour so each
+   piece works standalone or recombined. */
+.pos-panel--cart-items .pos-panel__body,
+.pos-panel--cart-totals .pos-panel__body,
+.pos-panel--cart-actions .pos-panel__body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* cart-items: the tabs strip (if present) stays pinned in the header, the
+   line list is the growing scroll region inside the body. */
+.pos-panel--cart-items .pos-cart-tabs {
+    flex: 0 0 auto;
+}
+
+.pos-panel--cart-items .pos-cart-lines {
+    flex: 1 1 auto;
+}
+
+.pos-panel--cart-items .pos-empty {
+    margin: auto;
+}
+
+/* cart-totals: a compact totals card; the grand-total row stays the hero.
+   UIFIX item 47: rows sit TOP-aligned in their natural rhythm - the old
+   margin-top:auto bottom-anchoring opened a big blank band above Subtotal
+   whenever the block was taller than its few rows. The block's default
+   height fits the rows (layout.js); extra rows (discount / coupon / POS
+   discount / tax) simply extend the stack downward, and a deliberately
+   shrunken block still scrolls per item 25 (body stays the scroller). */
+.pos-panel--cart-totals .pos-panel__body {
+    gap: var(--pos-sp-3);
+    /* UIFIX item 47 (round 1): same cure as cart-actions below - the
+       generic scroll-edge breathing pad (--pos-sp-5) is exactly the
+       headroom the grand Total loses when an extra discount row appears
+       at the default 1366×768 rect. Step it down to the body token so
+       the Total clears the bottom edge with the discount chip showing. */
+    padding-bottom: var(--pos-sp-3);
+}
+
+.pos-panel--cart-totals .pos-totals {
+    flex: 0 0 auto;
+}
+
+/* UIFIX item 47 (round 1): removable chips inside totals rows (POS
+   discount, coupon) inherit the control-height chip (~36px + border),
+   inflating that one row to ~39px while the block's default rect only
+   has ~21px to spare - the grand Total then clips past the panel
+   bottom with no visible scroll affordance. Inside the totals table a
+   chip is a compact inline remove affordance, not a primary control:
+   collapse it to the row's own rhythm (~22px - the 16px sprite x plus
+   hairline padding) so a discount/coupon row costs barely more than a
+   plain row and Total stays on-panel. Tap comfort is preserved by the
+   row's full-width hit area being just the chip in that cell. */
+.pos-panel--cart-totals .pos-totals__row .pos-chip {
+    min-height: 0;
+    padding: 1px var(--pos-sp-2) 1px var(--pos-sp-3);
+    gap: var(--pos-sp-1);
+    font-size: var(--pos-fs-xs);
+    line-height: 1.2;
+}
+
+/* cart-actions: the discount/coupon/custom/customer/note/hold + CHARGE
+   cluster. The six actions sit in an equal-cell grid that drops columns
+   as the block narrows (UIFIX items 21 + 25); CHARGE stays in the pinned
+   .pos-panel__footer while the body scrolls if the block is shrunk. The
+   CHARGE slab (.pos-btn--lg.pos-btn--primary) keeps its breathing glow
+   whether it sits here or in a combined cart footer. */
+.pos-panel--cart-actions .pos-panel__body {
+    gap: var(--pos-sp-2);
+    /* the generic body keeps an extra-deep bottom pad (--pos-sp-5) as
+       breathing room against an open scroll edge, but here the pinned
+       CHARGE footer already closes the block visually AND that depth
+       left the h:14 default rect 5px short at 1366×768 (scrollHeight
+       156 vs clientHeight 151 - a phantom 5px scroll range, UIFIX
+       items 21/26). The token step down (20->12px, compact 16->8px)
+       absorbs it with margin to spare while the 6-action grid keeps
+       its full --pos-sp-2 rhythm. */
+    padding-bottom: var(--pos-sp-3);
+    /* UIFIX item 46: CHARGE follows the six actions with normal spacing -
+       the body only claims its content height (no flex:1 spacer), so a
+       block taller than its content never opens a dead band between the
+       action grid and the CHARGE footer; slack from a deliberate enlarge
+       (item 44) falls quietly BELOW the footer instead. flex-shrink:1 +
+       min-height:0 + overflow keep the item-25 shrink/scroll behaviour. */
+    flex: 0 1 auto;
+}
+
+.pos-panel--cart-actions .pos-btn {
+    width: 100%;
+    min-width: 0;
+}
+
+.pos-panel--cart-actions .pos-row {
+    gap: var(--pos-sp-2);
+}
+
+/* item 50 (supersedes the item-21 hard floor): the old
+   .pos-panel--cart-actions { min-height: control-h·4 + 96px } backstop is
+   GONE. The pinned default rect (layout.js h:14 ≈ 290-306px) now fits the
+   6-action grid + CHARGE footer naturally at both target viewports, so the
+   floor no longer rescued anything at the default - but it actively fought
+   free resize (item 44): layout.js's per-block minimum allows h:9 (≈182px)
+   while the CSS floor kept the panel 288px tall, overflowing its grid cell
+   and painting over the block below. A deliberately small cart-actions now
+   shrinks honestly - header + scrolling body + pinned CHARGE (item 25) -
+   and the generic .pos-grid .pos-panel floor still stops uselessness. */
+
+/* the six actions: equal cells, auto-fit so 4->3->2->1 columns as the block
+   narrows, uniform token gap - all 6 always reachable, never clipped */
+.pos-panel--cart-actions .pos-denominations {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(min(calc(104px * var(--pos-btn-scale)), 100%), 1fr)
+    );
+    gap: var(--pos-sp-2);
+    align-content: start;
+}
+
+.pos-panel--cart-actions .pos-denominations .pos-btn {
+    min-height: calc(var(--pos-control-h) + 8px);
+}
+
+/* CHARGE breathing glow also applies when the big primary button lives in
+   a standalone cart-actions block (mirrors the combined-cart footer rule
+   in §12 so the signature moment survives decomposition). */
+.pos-panel--cart-actions .pos-btn--lg.pos-btn--primary:not(:disabled) {
+    animation: pos-breathe 3s ease-in-out infinite;
+}
+
+.pos-panel--cart-actions .pos-btn--lg.pos-btn--primary:disabled {
+    background: var(--pos-surface-3);
+    border-color: var(--pos-border);
+    color: var(--pos-text-faint);
+    box-shadow: none;
+    animation: none;
+}
+
+/* ============================================================
+   21d. Options modal (UIFIX item 34 - all product types)
+   modal-options.phtml / Alpine.store('posOptions') in catalog.js.
+   Configurable swatch/pill groups, grouped qty rows, bundle choice
+   rows, custom-option inputs, validation states and the running
+   DISPLAY price (the server-priced cart payload is authoritative).
+   Spacing follows the item-14 token scale.
+   ============================================================ */
+
+/* product summary strip pinned at the top of the dialog body */
+.pos-options__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    padding-bottom: var(--pos-sp-3);
+    border-bottom: 1px solid var(--pos-border);
+}
+
+.pos-options__thumb {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    object-fit: contain;
+    border-radius: var(--pos-radius-sm);
+    background: var(--pos-surface-2);
+}
+
+.pos-options__summary-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-1);
+    min-width: 0;
+}
+
+.pos-options__summary-name {
+    font-family: var(--pos-font-display);
+    font-weight: 700;
+    font-size: var(--pos-fs-md);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pos-options__summary-sku {
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+/* option group - label->control gap = --pos-sp-2, group rhythm = --pos-sp-4
+   (item 14 spacing scale) */
+.pos-options__group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-2);
+    margin-top: var(--pos-sp-4);
+}
+
+.pos-options__label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--pos-sp-1);
+    font-size: var(--pos-fs-sm);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+/* required marker + missing-required validation tint (status TEXT always
+   uses the ink token, never raw danger - WCAG rule in DESIGN.md) */
+.pos-options__required {
+    color: var(--pos-danger-ink);
+}
+
+.pos-options__group.is-missing > .pos-options__label {
+    color: var(--pos-danger-ink);
+}
+
+/* value pills (configurable attribute values without a color swatch) */
+.pos-options__values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pos-sp-2);
+}
+
+.pos-options__value {
+    min-height: var(--pos-control-h);
+    padding: 0 var(--pos-sp-4);
+    border: 1px solid var(--pos-border);
+    border-radius: 999px;
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    font-size: var(--pos-fs-sm);
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press);
+}
+
+.pos-options__value:hover:not(:disabled) {
+    border-color: var(--pos-accent);
+}
+
+.pos-options__value:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.pos-options__value--active {
+    background: var(--pos-accent-soft-2);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent-ink);
+    font-weight: 700;
+}
+
+/* OOS / unresolvable combination: struck + dimmed, never tappable */
+.pos-options__value--disabled,
+.pos-options__value:disabled {
+    opacity: 0.45;
+    text-decoration: line-through;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* color swatch values reuse .pos-swatch; the disabled state mirrors the
+   pill treatment (no scale-up affordance on an unavailable combo) */
+.pos-options__swatch:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* grouped associated rows + bundle qty rows */
+.pos-options__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pos-sp-3);
+    padding: var(--pos-sp-2) 0;
+    border-bottom: 1px solid var(--pos-border);
+}
+
+.pos-options__row:last-child,
+.pos-options__row--qty {
+    border-bottom: 0;
+}
+
+.pos-options__row--disabled {
+    opacity: 0.55;
+}
+
+.pos-options__row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.pos-options__row-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pos-options__row-meta {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--pos-sp-1);
+    color: var(--pos-text-muted);
+    font-size: var(--pos-fs-xs);
+}
+
+/* bundle / custom-option choice rows - full-width tactile check rows */
+.pos-options__choices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pos-sp-2);
+}
+
+.pos-options__choice {
+    display: flex;
+    align-items: center;
+    gap: var(--pos-sp-3);
+    width: 100%;
+    min-height: var(--pos-control-h);
+    padding: var(--pos-sp-2) var(--pos-sp-3);
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius);
+    background: var(--pos-raised);
+    color: var(--pos-text);
+    font: inherit;
+    font-size: var(--pos-fs-sm);
+    text-align: left;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 var(--pos-highlight), var(--pos-shadow-press);
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        transform var(--pos-press);
+}
+
+.pos-options__choice:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.pos-options__choice--active {
+    border-color: var(--pos-accent);
+    background: var(--pos-accent-soft);
+}
+
+.pos-options__choice--disabled,
+.pos-options__choice:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* check square: empty outline -> accent fill when the row is picked */
+.pos-options__choice-mark {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--pos-border-strong);
+    border-radius: 6px;
+    color: transparent;
+    transition: background-color var(--pos-speed) var(--pos-ease),
+        border-color var(--pos-speed) var(--pos-ease),
+        color var(--pos-speed) var(--pos-ease);
+}
+
+.pos-options__choice--active .pos-options__choice-mark {
+    border-color: var(--pos-accent-active);
+    background: var(--pos-accent-active);
+    color: var(--pos-accent-contrast);
+}
+
+.pos-options__choice-label {
+    flex: 1;
+    min-width: 0;
+}
+
+/* price delta tag on choices/labels - accent TEXT uses the ink token */
+.pos-options__delta {
+    color: var(--pos-accent-ink);
+    font-size: var(--pos-fs-xs);
+    white-space: nowrap;
+}
+
+/* running price slab (client DISPLAY only - server is authoritative) */
+.pos-options__total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--pos-sp-3);
+    margin-top: var(--pos-sp-5);
+    padding: var(--pos-sp-3) var(--pos-sp-4);
+    border: 1px solid var(--pos-border);
+    border-radius: var(--pos-radius);
+    background: var(--pos-surface-2);
+}
+
+.pos-options__total-label {
+    font-size: var(--pos-fs-sm);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pos-text-muted);
+}
+
+.pos-options__total-amount {
+    font-family: var(--pos-font-display);
+    font-size: var(--pos-fs-xl);
+    font-weight: 800;
+}
+
+.pos-options__hint {
+    display: block;
+    margin-top: var(--pos-sp-2);
+    color: var(--pos-text-faint);
+    font-size: var(--pos-fs-xs);
+}
+
+/* catalog-card "Options" hint chip (items 34 + 36): composite /
+   custom-option cards show "From <price>" on its own price line and this
+   compact glyph-chip on the line below - a quiet, self-contained pill
+   (sliders/gear icon + label) that always has room, never the truncated
+   "Optio..." of the old inline badge. Simple cards never render it. */
+.pos-product-card__options-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pos-sp-1);
+    max-width: 100%;
+    padding: 2px var(--pos-sp-2);
+    border: 1px solid color-mix(in srgb, var(--pos-accent) 26%, transparent);
+    border-radius: 999px;
+    background: var(--pos-accent-soft);
+    color: var(--pos-accent-ink);
+    font-size: var(--pos-fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.pos-product-card__options-hint .pos-icon {
+    width: calc(12px * var(--pos-font-scale));
+    height: calc(12px * var(--pos-font-scale));
+    flex: 0 0 auto;
+}
+
+/* ============================================================
+   22. Responsive - tablet-first, phone fallback
+   ============================================================ */
+
+@media (min-width: 900.02px) and (max-width: 1023.98px), (max-width: 599.98px) {
+    .pos-btn--icon .pos-btn__label {
+        display: none;
+    }
+}
+
+@media (min-width: 900.02px) and (max-width: 1023.98px) {
+    .pos-header__store {
+        max-width: 150px;
+    }
+}
+
+.pos-chip--session {
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .pos-header__info {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .pos-header__store {
+        max-width: none;
+    }
+
+    .pos-grid .pos-panel {
+        grid-column: auto !important;
+        grid-row: auto !important;
+    }
+
+    .pos-panel--cart-items {
+        order: -3;
+        min-height: 260px;
+    }
+
+    .pos-panel--cart-totals {
+        order: -2;
+        min-height: 0;
+    }
+
+    .pos-panel--cart-actions {
+        order: -1;
+        min-height: 0;
+        max-height: none;
+    }
+
+    .pos-panel--cart-actions .pos-panel__body,
+    .pos-panel--cart-totals .pos-panel__body {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    body.pos-body {
+        overflow: auto;
+    }
+
+    .pos-app {
+        height: auto;
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    .pos-grid {
+        display: flex;
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .pos-panel {
+        flex: 0 0 auto;
+        min-height: 220px;
+        max-height: 70vh;
+        max-height: 70dvh;
+        z-index: auto !important;
+    }
+
+    .pos-header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .pos-header__actions {
+        width: 100%;
+        margin-left: 0;
+        justify-content: space-between;
+        overflow-x: auto;
+    }
+
+    .pos-cart-tabs {
+        order: 5;
+        width: 100%;
+        flex-basis: 100%;
+    }
+
+    .pos-modal-backdrop {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .pos-modal {
+        max-width: none;
+        max-height: 94vh;
+        max-height: 94dvh;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    .pos-layout-toolbar {
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        transform: none;
+        max-width: none;
+    }
+
+    /* UIFIX item 31/34 cleanup: the narrow-viewport .pos-product-grid
+       override (once auto-fit - the lone-card billboard bug) is GONE. The
+       live grid carries its auto-FILL template inline (panel-catalog.phtml),
+       which always beats any stylesheet rule, so the override was dead
+       weight; the base .pos-product-grid rule (§ catalog) stays auto-fill. */
+
+    .pos-settings__row {
+        flex-wrap: wrap;
+    }
+
+    .pos-settings__control {
+        justify-content: flex-start;
+        width: 100%;
+    }
+}
+
+/* ============================================================
+   23. Motion preferences & print safety
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* The terminal itself never prints - receipts print from their own page
+   (css/receipt.css) via a hidden iframe. Do not touch receipt print CSS. */
+@media print {
+    body.pos-body {
+        display: none !important;
+    }
+}
+
+.pos-panel--cart-items .pos-panel__body {
+    container-type: inline-size;
+}
+
+@container (max-width: 420px) {
+    .pos-cart-line {
+        flex-wrap: wrap;
+        row-gap: var(--pos-sp-2);
+    }
+
+    .pos-cart-line__info {
+        flex: 1 1 calc(100% - 44px - var(--pos-sp-3));
+    }
+
+    .pos-cart-line__name {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .pos-cart-line__meta {
+        white-space: nowrap;
+    }
+
+    .pos-cart-line__qty {
+        margin-left: calc(44px + var(--pos-sp-3));
+    }
+
+    .pos-cart-line__total {
+        margin-left: auto;
+    }
+}
+
+.pos-product-card {
+    container-type: inline-size;
+}
+
+@container (max-width: 170px) {
+    .pos-product-card__actions {
+        flex-direction: column;
+    }
+
+    .pos-product-card__action.pos-quickkeys__pager-btn {
+        min-width: 28px;
+        min-height: 28px;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pos-product-card__price-row .pos-product-card__sku {
+        display: none;
+    }
+}
+
+@media (max-width: 1279.98px) and (min-width: 900.02px) {
+    .pos-panel--cart-actions .pos-denominations {
+        grid-template-columns: repeat(
+            auto-fit,
+            minmax(min(calc(84px * var(--pos-btn-scale)), 100%), 1fr)
+        );
+    }
+
+    .pos-panel--cart-actions .pos-denominations .pos-btn {
+        min-height: var(--pos-control-h);
+        padding-left: var(--pos-sp-1);
+        padding-right: var(--pos-sp-1);
+    }
+}

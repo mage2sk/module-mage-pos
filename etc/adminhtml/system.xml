@@ -1,0 +1,163 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Panth MagePos - system configuration (section panth_pos, tab panth).
+ *
+ * The "panth" tab itself is declared by Panth_Core; this file only
+ * references it, exactly like the other Panth modules do.
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <section id="panth_pos" translate="label" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
+            <class>separator-top</class>
+            <label>Point of Sale (MagePos)</label>
+            <tab>panth</tab>
+            <resource>Panth_MagePos::config</resource>
+
+            <group id="general" translate="label" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>General</label>
+                <field id="enabled" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enable Module</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Master switch for the POS terminal and all MagePos features.</comment>
+                </field>
+                <field id="idle_lock_minutes" translate="label comment" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Idle Auto-Lock (minutes)</label>
+                    <validate>validate-digits</validate>
+                    <comment>Minutes of terminal inactivity before the screen locks and asks for the cashier PIN. Set 0 to disable auto-lock.</comment>
+                    <depends>
+                        <field id="enabled">1</field>
+                    </depends>
+                </field>
+                <field id="default_register" translate="label comment" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Default Register ID</label>
+                    <validate>validate-digits</validate>
+                    <comment>Register ID preselected on the terminal login screen. Leave empty to let the cashier choose. Manage registers under Point of Sale (MagePos) &gt; Registers.</comment>
+                    <depends>
+                        <field id="enabled">1</field>
+                    </depends>
+                </field>
+            </group>
+
+            <group id="catalog" translate="label" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Catalog &amp; Barcode</label>
+                <field id="barcode_attribute" translate="label comment" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Barcode Attribute Code</label>
+                    <comment>Product attribute code matched when a barcode is scanned (keyboard wedge or camera). Default: sku.</comment>
+                </field>
+                <field id="search_page_size" translate="label comment" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Search Page Size</label>
+                    <validate>validate-digits validate-greater-than-zero</validate>
+                    <comment>Number of products returned per page by the terminal product search and category browse.</comment>
+                </field>
+                <field id="show_out_of_stock" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Show Out of Stock Products</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>When enabled, out-of-stock products are listed in terminal search and category results.</comment>
+                </field>
+                <field id="offline_catalog_limit" translate="label comment" type="text" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Offline Catalog Cache Limit</label>
+                    <validate>validate-digits</validate>
+                    <comment>Maximum number of products included in the offline catalog snapshot cached in the browser (IndexedDB).</comment>
+                </field>
+            </group>
+
+            <group id="customer" translate="label" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Customers</label>
+                <field id="guest_email" translate="label comment" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Guest Checkout Email</label>
+                    <validate>validate-email</validate>
+                    <comment>Email address used for POS orders placed without selecting a customer.</comment>
+                </field>
+                <field id="default_customer_group" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Default Customer Group</label>
+                    <source_model>Magento\Customer\Model\Config\Source\Group</source_model>
+                    <comment>Customer group assigned to customers created from the POS terminal.</comment>
+                </field>
+            </group>
+
+            <group id="custom_product" translate="label" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Custom Products</label>
+                <field id="sku" translate="label comment" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Placeholder Product SKU</label>
+                    <comment>SKU of the placeholder product used for ad-hoc (custom) line items. Created automatically on install as pos-custom-sale.</comment>
+                </field>
+                <field id="default_tax_class" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Default Tax Class</label>
+                    <source_model>Magento\Tax\Model\TaxClass\Source\Product</source_model>
+                    <comment>Tax class applied to custom line items when the cashier does not pick one.</comment>
+                </field>
+            </group>
+
+            <group id="checkout" translate="label" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Checkout</label>
+                <field id="order_note_prefix" translate="label comment" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Order Note Prefix</label>
+                    <comment>Prefix added to order comments created from the POS terminal.</comment>
+                </field>
+                <field id="auto_invoice_offline" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Auto-Invoice Offline Payments</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Automatically create an offline-captured invoice when an order is fully paid with cash or offline methods.</comment>
+                </field>
+                <field id="require_session" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Require Open Register Session</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>When enabled, sales are blocked unless the cashier has an open register session.</comment>
+                </field>
+            </group>
+
+            <group id="receipt" translate="label" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Receipt</label>
+                <field id="logo" translate="label comment" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Receipt Logo URL</label>
+                    <comment>Absolute URL or media-relative path of the logo printed at the top of receipts. Leave empty to print the store name only.</comment>
+                </field>
+                <field id="header" translate="label comment" type="textarea" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Receipt Header Text</label>
+                    <comment>Shown below the logo on every receipt. Per-register header text (Registers grid) overrides this value.</comment>
+                </field>
+                <field id="footer" translate="label comment" type="textarea" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Receipt Footer Text</label>
+                    <comment>Shown at the bottom of every receipt. Per-register footer text (Registers grid) overrides this value.</comment>
+                </field>
+                <field id="show_tax_breakdown" translate="label comment" type="select" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Show Tax Breakdown</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Print the per-rate tax breakdown in the receipt totals section.</comment>
+                </field>
+                <field id="auto_email" translate="label comment" type="select" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Auto-Email Receipt</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Automatically email the receipt to the customer when an email address is available on the order.</comment>
+                </field>
+            </group>
+
+            <group id="offline" translate="label" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Offline Mode</label>
+                <field id="enabled" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enable Offline Mode</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Caches the catalog in the browser and queues orders while the connection is down; queued orders sync automatically when back online.</comment>
+                </field>
+            </group>
+
+            <group id="session" translate="label" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Register Sessions</label>
+                <field id="auto_close_hours" translate="label comment" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Auto-Close Sessions After (hours)</label>
+                    <validate>validate-digits</validate>
+                    <comment>Not used in this version: sessions are not closed automatically. Close sessions at the terminal or use Force Close in the admin Sessions grid.</comment>
+                </field>
+            </group>
+
+            <group id="payment" translate="label comment" sortOrder="90" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Payment Methods</label>
+                <comment><![CDATA[POS tender types (cash, card terminal, payment link, etc.) are not configured here. Manage them in the grid under <strong>Point of Sale (MagePos) &gt; Payment Methods</strong> in the admin menu. All POS orders are recorded against the internal "POS Payment" (panth_pos) payment method; the individual tenders are stored per order.]]></comment>
+            </group>
+
+        </section>
+    </system>
+</config>

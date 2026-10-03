@@ -1,0 +1,100 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal modal: open register session (spec §9) - register confirm +
+ * opening float keypad + optional note. State lives in
+ * Alpine.store('posRegister') (web/js/pos/register.js), shared with
+ * panel-session.phtml. Opened via $store.posRegister.openModal() or the
+ * `pos:open-session-modal` window CustomEvent.
+ */
+declare(strict_types=1);
+
+/** @var \Panth\MagePos\Block\Terminal $block */
+/** @var \Magento\Framework\Escaper $escaper */
+
+$keypadKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back'];
+?>
+<div class="pos-modal-backdrop"
+     data-modal="session"
+     x-data
+     x-show="$store.posRegister.showOpenModal"
+     style="display:none"
+     @click.self="$store.posRegister.closeOpenModal()"
+     @keydown.escape.window="$store.posRegister.closeOpenModal()">
+    <div class="pos-modal pos-modal--sm" role="dialog" aria-modal="true"
+         aria-label="<?= $escaper->escapeHtmlAttr(__('Open Register Session')) ?>">
+        <div class="pos-modal__header">
+            <h2 class="pos-modal__title"><?= $escaper->escapeHtml(__('Open Register Session')) ?></h2>
+            <button type="button"
+                    class="pos-modal__close"
+                    @click="$store.posRegister.closeOpenModal()"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+        <div class="pos-modal__body">
+            <!-- 1. Register confirm tile -->
+            <h3 class="pos-section-title" style="color: var(--pos-text-muted)"><?= $escaper->escapeHtml(__('1. Confirm the register')) ?></h3>
+            <div class="pos-empty" x-show="!$store.posRegister.registers.length">
+                <span class="pos-empty__icon" aria-hidden="true">
+                    <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-cash"/></svg>
+                </span>
+                <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No active registers found. Create one in the admin panel first.')) ?></span>
+            </div>
+            <ul class="pos-list" x-show="$store.posRegister.registers.length">
+                <template x-for="register in $store.posRegister.registers" :key="register.id">
+                    <li class="pos-list__item pos-register-option"
+                        :class="{'pos-list__item--selected': $store.posRegister.selectedRegisterId === register.id}"
+                        @click="$store.posRegister.selectRegister(register.id)">
+                        <span class="pos-register-option__radio" aria-hidden="true"></span>
+                        <span class="pos-list__item-info">
+                            <strong x-text="register.name"></strong>
+                        </span>
+                        <span class="pos-badge" x-text="register.code"></span>
+                    </li>
+                </template>
+            </ul>
+
+            <!-- 2. Opening float keypad -->
+            <h3 class="pos-section-title" style="color: var(--pos-text-muted)"><?= $escaper->escapeHtml(__('2. Count the opening float')) ?></h3>
+            <div class="pos-keypad__display pos-amount"
+                 x-text="$store.posRegister.money($store.posRegister.bufferAmount('float'))"></div>
+            <div class="pos-keypad">
+                <?php foreach ($keypadKeys as $key): ?>
+                    <button type="button"
+                            class="pos-keypad__key<?= $key === 'back' ? ' pos-keypad__key--action' : '' ?>"
+                            <?= $key === 'back' ? 'aria-label="' . $escaper->escapeHtmlAttr(__('Backspace')) . '"' : '' ?>
+                            @click="$store.posRegister.keypad('float', '<?= $escaper->escapeJs($key) ?>')">
+                        <?= $key === 'back' ? '&#9003;' : $escaper->escapeHtml($key) ?>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- 3. Optional note -->
+            <h3 class="pos-section-title" style="color: var(--pos-text-muted)"><?= $escaper->escapeHtml(__('3. Add a note (optional)')) ?></h3>
+            <div class="pos-row pos-row--stack">
+                <input type="text"
+                       class="pos-input"
+                       placeholder="<?= $escaper->escapeHtmlAttr(__('Opening note (optional)')) ?>"
+                       x-model="$store.posRegister.openNote">
+            </div>
+        </div>
+        <div class="pos-modal__footer">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost"
+                    :disabled="$store.posRegister.opening"
+                    @click="$store.posRegister.closeOpenModal()">
+                <?= $escaper->escapeHtml(__('Cancel')) ?>
+            </button>
+            <button type="button"
+                    class="pos-btn pos-btn--primary pos-btn--lg"
+                    :disabled="$store.posRegister.opening || !$store.posRegister.selectedRegisterId"
+                    @click="$store.posRegister.confirmOpen()">
+                <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-cash-in"/></svg>
+                <span x-show="!$store.posRegister.opening"><?= $escaper->escapeHtml(__('Open Session')) ?></span>
+                <span x-show="$store.posRegister.opening" style="display:none"><?= $escaper->escapeHtml(__('Opening...')) ?></span>
+            </button>
+        </div>
+    </div>
+</div>

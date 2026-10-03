@@ -1,0 +1,415 @@
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Panth_MagePos receipt stylesheet - "Tactile Console" paper ticket.
+ * - On screen: a paper ticket (warm grain, perforated edges, slight tilt)
+ *   centered on the dark "Ink Console" canvas.
+ * - In print:  80 mm thermal roll (≈72 mm printable width) - zero chrome,
+ *   zero textures, zero colors. Pure black on white.
+ *
+ * Fonts are bundled in the module (css/fonts.css); every family below
+ * carries a full system fallback, so nothing breaks offline.
+ */
+
+/* ------------------------------------------------------------- base */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100vh;
+    background-color: #0e1116;
+    background-image:
+        radial-gradient(120% 70% at 50% -10%, #16202e 0%, rgba(22, 32, 46, 0) 62%),
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='0.022'/></svg>");
+    font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #1c1b1a;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------- toolbar */
+
+.receipt-toolbar {
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 0;
+}
+
+.receipt-toolbar__btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ff7e61 0%, #ff6b4a 55%, #f2603f 100%);
+    color: #ffffff;
+    font-family: "Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 12px 28px;
+    min-height: 48px;
+    cursor: pointer;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        0 1px 2px rgba(0, 0, 0, 0.35),
+        0 10px 26px rgba(255, 107, 74, 0.35);
+    transition: transform 90ms ease-out, box-shadow 90ms ease-out, background 140ms ease;
+}
+
+.receipt-toolbar__btn:hover,
+.receipt-toolbar__btn:focus-visible {
+    background: linear-gradient(180deg, #ff8d72 0%, #ff7e61 55%, #ff6b4a 100%);
+}
+
+.receipt-toolbar__btn:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+}
+
+.receipt-toolbar__btn:active {
+    transform: translateY(1px);
+    background: #e85a3b;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 1px 2px rgba(0, 0, 0, 0.3),
+        0 3px 10px rgba(255, 107, 74, 0.25);
+}
+
+.receipt-toolbar__icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+}
+
+/* ------------------------------------------------- receipt document */
+
+/*
+ * The paper ticket. Warm off-white stock with a faint grain, a gentle
+ * tilt, and perforated (torn-roll) top + bottom edges drawn with the
+ * ::before / ::after sawtooth strips. Screen only - print flattens all
+ * of this back to a plain 72 mm column.
+ */
+.receipt {
+    position: relative;
+    width: 324px;
+    margin: 28px auto 56px;
+    padding: 22px 18px 26px;
+    background-color: #fffdf6;
+    background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23g)' opacity='0.05'/></svg>"),
+        linear-gradient(180deg, rgba(28, 27, 26, 0.025) 0%, rgba(28, 27, 26, 0) 56px),
+        linear-gradient(0deg, rgba(28, 27, 26, 0.03) 0%, rgba(28, 27, 26, 0) 64px);
+    transform: rotate(-0.4deg);
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.35),
+        0 14px 38px rgba(0, 0, 0, 0.45),
+        0 30px 70px rgba(0, 0, 0, 0.35);
+}
+
+/* perforated roll edges (sawtooth) */
+.receipt::before,
+.receipt::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 7px;
+    background-repeat: repeat-x;
+    background-size: 14px 7px;
+    pointer-events: none;
+}
+
+/* top edge - teeth point up */
+.receipt::before {
+    top: -7px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='7'><path d='M0 7 L7 0 L14 7 Z' fill='%23fffdf6'/></svg>");
+}
+
+/* bottom edge - teeth point down */
+.receipt::after {
+    bottom: -7px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='7'><path d='M0 0 L14 0 L7 7 Z' fill='%23fffdf6'/></svg>");
+}
+
+/* --------------------------------------------------------------- head */
+
+.receipt__head {
+    text-align: center;
+}
+
+.receipt__logo {
+    max-width: 60%;
+    max-height: 80px;
+    margin: 0 auto 8px;
+    display: block;
+    filter: grayscale(1);
+}
+
+.receipt__store-name {
+    font-family: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #1c1b1a;
+}
+
+.receipt__store-address,
+.receipt__header-text {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #56524b;
+}
+
+.receipt__rule {
+    border-top: 1px dashed #aaa49a;
+    margin: 11px 0;
+}
+
+/* -------------------------------------------------------------- meta */
+
+.receipt__meta {
+    margin: 0;
+}
+
+.receipt__meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.receipt__meta-row dt {
+    color: #6e6a63;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    line-height: 1.74; /* baseline-match the 12px dd */
+}
+
+.receipt__meta-row dd {
+    margin: 0;
+    text-align: right;
+    word-break: break-word;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------- items / money */
+
+.receipt__items,
+.receipt__totals,
+.receipt__payments {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.receipt__items td,
+.receipt__totals td,
+.receipt__payments td {
+    padding: 1px 0;
+    vertical-align: top;
+}
+
+.receipt__amount {
+    text-align: right;
+    white-space: nowrap;
+    padding-left: 8px !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.receipt__item-name-row td {
+    padding-top: 6px;
+    font-weight: 700;
+    word-break: break-word;
+}
+
+.receipt__custom-flag {
+    font-weight: 400;
+    font-style: italic;
+    color: #6e6a63;
+}
+
+.receipt__item-qty-row .receipt__item-qty {
+    color: #56524b;
+    font-variant-numeric: tabular-nums;
+}
+
+.receipt__strike {
+    text-decoration: line-through;
+    color: #aaa49a;
+    margin-right: 3px;
+}
+
+.receipt__item-discount-row td,
+.receipt__item-note-row td {
+    font-size: 11px;
+    color: #6e6a63;
+    padding-left: 10px;
+}
+
+.receipt__item-discount-row .receipt__amount {
+    color: #6e6a63;
+}
+
+/* ------------------------------------------------------------ totals */
+
+.receipt__tax-row td {
+    color: #56524b;
+}
+
+.receipt__grand-total td {
+    padding-top: 8px;
+    font-family: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.receipt__grand-total .receipt__amount {
+    font-size: 19px;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.receipt__change-row td {
+    font-weight: 700;
+}
+
+.receipt__reference {
+    color: #6e6a63;
+    font-size: 11px;
+}
+
+/* ------------------------------------------------------ note / footer */
+
+.receipt__order-note {
+    font-size: 11px;
+    color: #56524b;
+}
+
+.receipt__footer {
+    text-align: center;
+}
+
+.receipt__footer-text {
+    font-size: 11px;
+    color: #56524b;
+}
+
+.receipt__footer-id {
+    margin-top: 10px;
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    color: #6e6a63;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------ 80 mm thermal print */
+
+/*
+ * Print is sacred: plain black on white, no grain, no tilt, no sawtooth,
+ * no shadows, no toolbar. Fits a 72 mm printable column on 80 mm stock.
+ */
+@media print {
+    @page {
+        size: 80mm auto;
+        margin: 0;
+    }
+
+    html,
+    body {
+        width: 72mm;
+        background: #ffffff;
+        background-image: none;
+    }
+
+    body {
+        min-height: 0;
+        font-size: 10.5px;
+        color: #000000;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .receipt {
+        width: 72mm;
+        margin: 0;
+        padding: 2mm 2mm 6mm;
+        background: #ffffff;
+        background-image: none;
+        box-shadow: none;
+        transform: none;
+    }
+
+    .receipt::before,
+    .receipt::after {
+        display: none;
+    }
+
+    .receipt__store-name {
+        font-size: 14px;
+        color: #000000;
+    }
+
+    .receipt__grand-total td {
+        font-size: 12.5px;
+    }
+
+    .receipt__grand-total .receipt__amount {
+        font-size: 14px;
+    }
+
+    .receipt__rule {
+        border-top-color: #000000;
+    }
+
+    .receipt__meta-row dt,
+    .receipt__store-address,
+    .receipt__header-text,
+    .receipt__footer-text,
+    .receipt__item-discount-row td,
+    .receipt__item-discount-row .receipt__amount,
+    .receipt__item-note-row td,
+    .receipt__order-note,
+    .receipt__custom-flag,
+    .receipt__reference,
+    .receipt__footer-id,
+    .receipt__tax-row td,
+    .receipt__item-qty-row .receipt__item-qty {
+        color: #000000;
+    }
+
+    .receipt__strike {
+        color: #000000;
+    }
+
+    .receipt__items tr,
+    .receipt__totals tr,
+    .receipt__payments tr {
+        page-break-inside: avoid;
+    }
+}
+
+/* ---------------------------------------------------- small screens */
+
+@media screen and (max-width: 380px) {
+    .receipt {
+        width: calc(100% - 24px);
+        margin: 20px 12px 40px;
+    }
+}

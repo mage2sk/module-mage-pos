@@ -1,0 +1,268 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS sales report dashboard: filters, KPI cards, breakdown tables and a
+ * pure-CSS by-hour bar visualization.
+ *
+ * @var \Panth\MagePos\Block\Adminhtml\Report $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+$summary = $block->getSummary();
+$byHour = $summary['by_hour'];
+$maxHourGross = 0.0;
+foreach ($byHour as $hourRow) {
+    $maxHourGross = max($maxHourGross, (float)$hourRow['gross']);
+}
+?>
+<div class="panth-pos-report">
+    <style>
+        .panth-pos-report { max-width: none; }
+        .panth-pos-report .ppr-filters {
+            display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px;
+            background: #fff; border: 1px solid #e3e3e3; border-radius: 0;
+            padding: 16px 20px; margin-bottom: 24px;
+        }
+        .panth-pos-report .ppr-filters label {
+            display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;
+        }
+        .panth-pos-report .ppr-filters .admin__field-control { position: relative; }
+        .panth-pos-report .ppr-filters input.admin__control-text { width: 160px; }
+        .panth-pos-report .ppr-filters select { min-width: 160px; }
+        .panth-pos-report .ppr-kpis {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px; margin-bottom: 24px;
+        }
+        .panth-pos-report .ppr-kpi {
+            background: #fff; border: 1px solid #e3e3e3; border-radius: 6px;
+            padding: 18px 20px; border-top: 3px solid #eb5202;
+        }
+        .panth-pos-report .ppr-kpi-label {
+            font-size: 13px; color: #666; text-transform: uppercase;
+            letter-spacing: .04em; margin-bottom: 6px;
+        }
+        .panth-pos-report .ppr-kpi-value { font-size: 28px; font-weight: 700; color: #333; }
+        .panth-pos-report .ppr-section {
+            background: #fff; border: 1px solid #e3e3e3; border-radius: 6px;
+            padding: 18px 20px; margin-bottom: 24px;
+        }
+        .panth-pos-report .ppr-section h2 {
+            font-size: 16px; font-weight: 700; margin: 0 0 14px; color: #333;
+        }
+        .panth-pos-report .ppr-grid-2 {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px;
+        }
+        .panth-pos-report table.ppr-table { width: 100%; border-collapse: collapse; }
+        .panth-pos-report table.ppr-table th,
+        .panth-pos-report table.ppr-table td {
+            text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 13px;
+        }
+        .panth-pos-report table.ppr-table th {
+            background: #f8f8f8; font-weight: 700; border-bottom: 1px solid #ddd;
+        }
+        .panth-pos-report table.ppr-table td.ppr-num,
+        .panth-pos-report table.ppr-table th.ppr-num { text-align: right; white-space: nowrap; }
+        .panth-pos-report .ppr-empty { color: #6b6b6b; font-style: italic; padding: 6px 0; }
+        .panth-pos-report .ppr-hours {
+            display: flex; align-items: flex-end; gap: 4px; height: 180px;
+            padding: 8px 4px 0; border-bottom: 1px solid #ddd;
+        }
+        .panth-pos-report .ppr-hour { flex: 1 1 0; display: flex; flex-direction: column;
+            justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+        .panth-pos-report .ppr-hour-bar {
+            width: 100%; max-width: 28px; background: #eb5202; border-radius: 3px 3px 0 0;
+            min-height: 2px; transition: opacity .15s ease;
+        }
+        .panth-pos-report .ppr-hour-bar.ppr-hour-bar-empty { background: #e9e9e9; }
+        .panth-pos-report .ppr-hour:hover .ppr-hour-bar { opacity: .75; }
+        .panth-pos-report .ppr-hour-labels { display: flex; gap: 4px; padding: 6px 4px 0; }
+        .panth-pos-report .ppr-hour-label {
+            flex: 1 1 0; text-align: center; font-size: 12px; color: #6b6b6b; min-width: 0;
+        }
+    </style>
+
+    <form class="ppr-filters" method="get" action="<?= $escaper->escapeUrl($block->getFormUrl()) ?>">
+        <div>
+            <label for="ppr-from"><?= $escaper->escapeHtml(__('From')) ?></label>
+            <div class="admin__field-control">
+                <input type="text" id="ppr-from" name="from" class="admin__control-text" autocomplete="off"
+                       value="<?= $escaper->escapeHtmlAttr($block->getFromParam()) ?>"
+                       data-mage-init='{"calendar":{"dateFormat":"yyyy-MM-dd","showsTime":false}}'/>
+            </div>
+        </div>
+        <div>
+            <label for="ppr-to"><?= $escaper->escapeHtml(__('To')) ?></label>
+            <div class="admin__field-control">
+                <input type="text" id="ppr-to" name="to" class="admin__control-text" autocomplete="off"
+                       value="<?= $escaper->escapeHtmlAttr($block->getToParam()) ?>"
+                       data-mage-init='{"calendar":{"dateFormat":"yyyy-MM-dd","showsTime":false}}'/>
+            </div>
+        </div>
+        <div>
+            <label for="ppr-register"><?= $escaper->escapeHtml(__('Register')) ?></label>
+            <select id="ppr-register" name="register_id" class="admin__control-select">
+                <option value=""><?= $escaper->escapeHtml(__('All Registers')) ?></option>
+                <?php foreach ($block->getRegisters() as $registerId => $registerLabel): ?>
+                    <option value="<?= $escaper->escapeHtmlAttr((string)$registerId) ?>"
+                        <?= $block->getRegisterId() === $registerId ? 'selected="selected"' : '' ?>>
+                        <?= $escaper->escapeHtml($registerLabel) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <button type="submit" class="action-default scalable action-secondary">
+                <span><?= $escaper->escapeHtml(__('Apply')) ?></span>
+            </button>
+        </div>
+    </form>
+
+    <div class="ppr-kpis">
+        <div class="ppr-kpi">
+            <div class="ppr-kpi-label"><?= $escaper->escapeHtml(__('Orders')) ?></div>
+            <div class="ppr-kpi-value"><?= $escaper->escapeHtml((string)$summary['orders_count']) ?></div>
+        </div>
+        <div class="ppr-kpi">
+            <div class="ppr-kpi-label"><?= $escaper->escapeHtml(__('Gross Sales')) ?></div>
+            <div class="ppr-kpi-value"><?= $escaper->escapeHtml($block->formatPrice((float)$summary['gross'])) ?></div>
+        </div>
+        <div class="ppr-kpi">
+            <div class="ppr-kpi-label"><?= $escaper->escapeHtml(__('Average Order')) ?></div>
+            <div class="ppr-kpi-value">
+                <?= $escaper->escapeHtml($block->formatPrice((float)$summary['average_order'])) ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="ppr-section">
+        <h2><?= $escaper->escapeHtml(__('Sales by Hour')) ?></h2>
+        <div class="ppr-hours">
+            <?php foreach ($byHour as $hourRow): ?>
+                <?php
+                $gross = (float)$hourRow['gross'];
+                $heightPercent = $maxHourGross > 0 ? max(round($gross / $maxHourGross * 100, 2), 1) : 0;
+                $title = sprintf(
+                    '%02d:00 - %s, %s',
+                    (int)$hourRow['hour'],
+                    __('%1 order(s)', (int)$hourRow['orders_count']),
+                    $block->formatPrice($gross)
+                );
+                ?>
+                <div class="ppr-hour" title="<?= $escaper->escapeHtmlAttr($title) ?>">
+                    <div class="ppr-hour-bar<?= $gross > 0 ? '' : ' ppr-hour-bar-empty' ?>"
+                         style="height: <?= $escaper->escapeHtmlAttr((string)($gross > 0 ? $heightPercent : 1)) ?>%;">
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <div class="ppr-hour-labels">
+            <?php foreach ($byHour as $hourRow): ?>
+                <div class="ppr-hour-label">
+                    <?= $escaper->escapeHtml((int)$hourRow['hour'] % 3 === 0 ? sprintf('%02d', (int)$hourRow['hour']) : '') ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
+    <div class="ppr-grid-2">
+        <div class="ppr-section">
+            <h2><?= $escaper->escapeHtml(__('By Payment Method')) ?></h2>
+            <?php if (empty($summary['by_payment_method'])): ?>
+                <div class="ppr-empty"><?= $escaper->escapeHtml(__('No payments in this period.')) ?></div>
+            <?php else: ?>
+                <table class="ppr-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escaper->escapeHtml(__('Method')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Orders')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Amount')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($summary['by_payment_method'] as $row): ?>
+                        <tr>
+                            <td>
+                                <?= $escaper->escapeHtml($row['method_title']) ?>
+                                <small>(<?= $escaper->escapeHtml($row['method_code']) ?>)</small>
+                            </td>
+                            <td class="ppr-num"><?= $escaper->escapeHtml((string)$row['orders_count']) ?></td>
+                            <td class="ppr-num">
+                                <?= $escaper->escapeHtml($block->formatPrice((float)$row['amount'])) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+
+        <div class="ppr-section">
+            <h2><?= $escaper->escapeHtml(__('By Cashier')) ?></h2>
+            <?php if (empty($summary['by_cashier'])): ?>
+                <div class="ppr-empty"><?= $escaper->escapeHtml(__('No orders in this period.')) ?></div>
+            <?php else: ?>
+                <table class="ppr-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escaper->escapeHtml(__('Cashier')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Orders')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Gross')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Avg. Order')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($summary['by_cashier'] as $row): ?>
+                        <tr>
+                            <td><?= $escaper->escapeHtml($row['name']) ?></td>
+                            <td class="ppr-num"><?= $escaper->escapeHtml((string)$row['orders_count']) ?></td>
+                            <td class="ppr-num">
+                                <?= $escaper->escapeHtml($block->formatPrice((float)$row['gross'])) ?>
+                            </td>
+                            <td class="ppr-num">
+                                <?= $escaper->escapeHtml($block->formatPrice((float)$row['average_order'])) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+
+        <div class="ppr-section">
+            <h2><?= $escaper->escapeHtml(__('By Register')) ?></h2>
+            <?php if (empty($summary['by_register'])): ?>
+                <div class="ppr-empty"><?= $escaper->escapeHtml(__('No orders in this period.')) ?></div>
+            <?php else: ?>
+                <table class="ppr-table">
+                    <thead>
+                    <tr>
+                        <th><?= $escaper->escapeHtml(__('Register')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Orders')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Gross')) ?></th>
+                        <th class="ppr-num"><?= $escaper->escapeHtml(__('Avg. Order')) ?></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($summary['by_register'] as $row): ?>
+                        <tr>
+                            <td>
+                                <?= $escaper->escapeHtml($row['name']) ?>
+                                <?php if (!empty($row['code'])): ?>
+                                    <small>(<?= $escaper->escapeHtml($row['code']) ?>)</small>
+                                <?php endif; ?>
+                            </td>
+                            <td class="ppr-num"><?= $escaper->escapeHtml((string)$row['orders_count']) ?></td>
+                            <td class="ppr-num">
+                                <?= $escaper->escapeHtml($block->formatPrice((float)$row['gross'])) ?>
+                            </td>
+                            <td class="ppr-num">
+                                <?= $escaper->escapeHtml($block->formatPrice((float)$row['average_order'])) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

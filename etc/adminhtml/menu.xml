@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Backend:etc/menu.xsd">
+    <menu>
+        <add id="Panth_MagePos::root"
+             title="Point of Sale (MagePos)"
+             module="Panth_MagePos"
+             sortOrder="95"
+             parent="Panth_Core::panth_extensions"
+             resource="Panth_MagePos::manage"/>
+        <add id="Panth_MagePos::terminal"
+             title="Launch Terminal"
+             module="Panth_MagePos"
+             sortOrder="10"
+             parent="Panth_MagePos::root"
+             action="panth_pos/terminal/launch"
+             resource="Panth_MagePos::terminal"/>
+        <add id="Panth_MagePos::registers"
+             title="Registers"
+             module="Panth_MagePos"
+             sortOrder="20"
+             parent="Panth_MagePos::root"
+             action="panth_pos/register/index"
+             resource="Panth_MagePos::registers"/>
+        <add id="Panth_MagePos::sessions"
+             title="Sessions"
+             module="Panth_MagePos"
+             sortOrder="30"
+             parent="Panth_MagePos::root"
+             action="panth_pos/session/index"
+             resource="Panth_MagePos::sessions"/>
+        <add id="Panth_MagePos::users"
+             title="POS Users"
+             module="Panth_MagePos"
+             sortOrder="40"
+             parent="Panth_MagePos::root"
+             action="panth_pos/user/index"
+             resource="Panth_MagePos::users"/>
+        <add id="Panth_MagePos::roles"
+             title="Roles"
+             module="Panth_MagePos"
+             sortOrder="50"
+             parent="Panth_MagePos::root"
+             action="panth_pos/role/index"
+             resource="Panth_MagePos::roles"/>
+        <add id="Panth_MagePos::methods"
+             title="Payment Methods"
+             module="Panth_MagePos"
+             sortOrder="60"
+             parent="Panth_MagePos::root"
+             action="panth_pos/method/index"
+             resource="Panth_MagePos::methods"/>
+        <add id="Panth_MagePos::quickkeys"
+             title="Quick Keys"
+             module="Panth_MagePos"
+             sortOrder="70"
+             parent="Panth_MagePos::root"
+             action="panth_pos/quickkey/index"
+             resource="Panth_MagePos::quickkeys"/>
+        <add id="Panth_MagePos::reports"
+             title="Reports"
+             module="Panth_MagePos"
+             sortOrder="80"
+             parent="Panth_MagePos::root"
+             action="panth_pos/report/index"
+             resource="Panth_MagePos::reports"/>
+        <add id="Panth_MagePos::config"
+             title="Configuration"
+             module="Panth_MagePos"
+             sortOrder="90"
+             parent="Panth_MagePos::root"
+             action="adminhtml/system_config/edit/section/panth_pos"
+             resource="Panth_MagePos::config"/>
+    </menu>
+</config>

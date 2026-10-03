@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Panth MagePos - default configuration values (section panth_pos)
+ * plus the offline payment/panth_pos method block (checkmo-style
+ * Adapter virtualType PanthPosPaymentFacade, declared in etc/di.xml).
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <panth_pos>
+            <general>
+                <enabled>1</enabled>
+                <idle_lock_minutes>5</idle_lock_minutes>
+                <default_register></default_register>
+            </general>
+            <catalog>
+                <barcode_attribute>sku</barcode_attribute>
+                <search_page_size>20</search_page_size>
+                <show_out_of_stock>0</show_out_of_stock>
+                <offline_catalog_limit>2000</offline_catalog_limit>
+            </catalog>
+            <customer>
+                <guest_email>pos-guest@example.com</guest_email>
+                <default_customer_group>1</default_customer_group>
+            </customer>
+            <custom_product>
+                <sku>pos-custom-sale</sku>
+                <default_tax_class>2</default_tax_class>
+            </custom_product>
+            <checkout>
+                <order_note_prefix>POS</order_note_prefix>
+                <auto_invoice_offline>1</auto_invoice_offline>
+                <require_session>1</require_session>
+            </checkout>
+            <receipt>
+                <logo></logo>
+                <header></header>
+                <footer>Thank you for your purchase!</footer>
+                <show_tax_breakdown>1</show_tax_breakdown>
+                <auto_email>0</auto_email>
+            </receipt>
+            <offline>
+                <enabled>1</enabled>
+            </offline>
+            <session>
+                <auto_close_hours>24</auto_close_hours>
+            </session>
+        </panth_pos>
+        <payment>
+            <panth_pos>
+                <active>1</active>
+                <model>PanthPosPaymentFacade</model>
+                <order_status>processing</order_status>
+                <title>POS Payment</title>
+                <allowspecific>0</allowspecific>
+                <group>offline</group>
+                <can_use_checkout>0</can_use_checkout>
+                <can_use_internal>1</can_use_internal>
+            </panth_pos>
+        </payment>
+    </default>
+</config>

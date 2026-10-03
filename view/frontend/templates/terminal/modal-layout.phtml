@@ -1,0 +1,115 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Layout editor toolbar (spec §9, modal-layout.phtml). Rendered as a
+ * floating, non-blocking toolbar so every panel stays visible and
+ * manipulable while editing:
+ * - preset buttons (classic / mirrored / catalog-max / compact)
+ * - per-panel visibility checkboxes
+ * - reset, cancel (revert) and save & exit
+ *
+ * Opening the 'layout' modal ($store.pos.openModal('layout'), header
+ * button - permission can_edit_layout) enters edit mode via the x-effect
+ * below; dragging/resizing/snapping itself lives in js/pos/layout.js.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+declare(strict_types=1);
+
+$presets = [
+    'classic' => __('Classic'),
+    'mirrored' => __('Mirrored'),
+    'catalog-max' => __('Catalog Max'),
+    'compact' => __('Compact'),
+];
+// Every independently-placeable block (UI-fix contract §18) - keys must match
+// PANEL_KEYS in js/pos/layout.js, including the toolbar and the three cart
+// sub-blocks the cart was decomposed into.
+$panels = [
+    'toolbar' => __('Toolbar'),
+    'catalog' => __('Catalog'),
+    'quickkeys' => __('Quick Keys'),
+    'cart-items' => __('Cart Items'),
+    'cart-totals' => __('Cart Totals'),
+    'cart-actions' => __('Cart Actions'),
+    'customer' => __('Customer'),
+    'holds' => __('Holds'),
+    'session' => __('Session'),
+];
+?>
+<div class="pos-layout-toolbar"
+     x-data="{ layoutModalWasOpen: false }"
+     x-show="$store.posLayout.editMode || $store.posLayout.isModalOpen('layout')"
+     x-cloak
+     x-effect="if ($store.posLayout.isModalOpen('layout')) {
+                   if (!$store.posLayout.editMode) { $store.posLayout.enterEdit() }
+                   layoutModalWasOpen = true
+               } else {
+                   if (layoutModalWasOpen && $store.posLayout.editMode) { $store.posLayout.cancelEdit() }
+                   layoutModalWasOpen = false
+               }"
+     role="toolbar"
+     aria-label="<?= $escaper->escapeHtmlAttr(__('Layout editor')) ?>">
+
+    <p class="pos-layout-toolbar__hint">
+        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-layout"/></svg>
+        <?= $escaper->escapeHtml(__('Drag blocks by their header · resize from the corner · overlaps glow red. Press Shift+L for Layout or Shift+S for Settings anytime.')) ?>
+    </p>
+
+    <!-- Presets -->
+    <div class="pos-layout-toolbar__group">
+        <span class="pos-layout-toolbar__label"><?= $escaper->escapeHtml(__('Presets')) ?></span>
+<?php foreach ($presets as $presetCode => $presetLabel): ?>
+        <button type="button"
+                class="pos-btn"
+                @click="$store.posLayout.applyPreset('<?= $escaper->escapeJs($presetCode) ?>')">
+            <?= $escaper->escapeHtml($presetLabel) ?>
+        </button>
+<?php endforeach; ?>
+    </div>
+
+    <span class="pos-layout-toolbar__divider" aria-hidden="true"></span>
+
+    <!-- Panel visibility -->
+    <div class="pos-layout-toolbar__group pos-layout-toolbar__group--grow">
+        <span class="pos-layout-toolbar__label"><?= $escaper->escapeHtml(__('Panels')) ?></span>
+<?php foreach ($panels as $panelKey => $panelLabel): ?>
+        <label class="pos-layout-check" style="min-height: max(48px, var(--pos-control-h, 48px));">
+            <input type="checkbox"
+                   :checked="$store.posLayout.panels['<?= $escaper->escapeJs($panelKey) ?>'].visible"
+                   @change="$store.posLayout.toggleVisible('<?= $escaper->escapeJs($panelKey) ?>', $event.target.checked)">
+            <span><?= $escaper->escapeHtml($panelLabel) ?></span>
+        </label>
+<?php endforeach; ?>
+    </div>
+
+    <span class="pos-layout-toolbar__divider" aria-hidden="true"></span>
+
+    <!-- Actions -->
+    <div class="pos-layout-toolbar__group">
+        <button type="button"
+                class="pos-btn pos-btn--ghost"
+                @click="$store.posLayout.resetLayout()"
+                title="<?= $escaper->escapeHtmlAttr(__('Reset to the default layout')) ?>">
+            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-restore"/></svg>
+            <?= $escaper->escapeHtml(__('Reset')) ?>
+        </button>
+        <button type="button"
+                class="pos-btn pos-btn--danger"
+                @click="$store.posLayout.cancelEdit()"
+                title="<?= $escaper->escapeHtmlAttr(__('Discard changes and exit')) ?>">
+            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-x"/></svg>
+            <?= $escaper->escapeHtml(__('Cancel')) ?>
+        </button>
+        <button type="button"
+                class="pos-btn pos-btn--primary"
+                :disabled="$store.posLayout.saving"
+                @click="$store.posLayout.saveAndExit()">
+            <svg class="pos-icon pos-icon--sm" aria-hidden="true" x-show="!$store.posLayout.saving"><use href="#pi-check"/></svg>
+            <span x-show="!$store.posLayout.saving"><?= $escaper->escapeHtml(__('Save & Exit')) ?></span>
+            <span x-show="$store.posLayout.saving" x-cloak><?= $escaper->escapeHtml(__('Saving...')) ?></span>
+        </button>
+    </div>
+</div>

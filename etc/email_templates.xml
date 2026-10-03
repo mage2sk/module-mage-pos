@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Panth_MagePos
+ *
+ * @category  Panth
+ * @package   Panth_MagePos
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Email:etc/email_templates.xsd">
+    <template id="panth_pos_receipt" label="POS Receipt" file="receipt.html" type="html" module="Panth_MagePos" area="frontend"/>
+</config>

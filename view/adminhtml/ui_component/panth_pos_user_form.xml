@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ */
+-->
+<form xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Ui:etc/ui_configuration.xsd">
+    <argument name="data" xsi:type="array">
+        <item name="js_config" xsi:type="array">
+            <item name="provider" xsi:type="string">panth_pos_user_form.panth_pos_user_form_data_source</item>
+        </item>
+        <item name="label" xsi:type="string" translate="true">POS User</item>
+        <item name="template" xsi:type="string">templates/form/collapsible</item>
+    </argument>
+    <settings>
+        <buttons>
+            <button name="back">
+                <url path="*/*/"/>
+                <class>back</class>
+                <label translate="true">Back</label>
+            </button>
+            <button name="save">
+                <class>save primary</class>
+                <label translate="true">Save POS User</label>
+            </button>
+        </buttons>
+        <namespace>panth_pos_user_form</namespace>
+        <dataScope>data</dataScope>
+        <deps>
+            <dep>panth_pos_user_form.panth_pos_user_form_data_source</dep>
+        </deps>
+    </settings>
+    <dataSource name="panth_pos_user_form_data_source">
+        <argument name="data" xsi:type="array">
+            <item name="js_config" xsi:type="array">
+                <item name="component" xsi:type="string">Magento_Ui/js/form/provider</item>
+            </item>
+        </argument>
+        <settings>
+            <submitUrl path="panth_pos/user/save"/>
+        </settings>
+        <dataProvider class="Panth\MagePos\Ui\Component\Form\DataProvider\UserFormDataProvider" name="panth_pos_user_form_data_source">
+            <settings>
+                <requestFieldName>id</requestFieldName>
+                <primaryFieldName>user_id</primaryFieldName>
+            </settings>
+        </dataProvider>
+    </dataSource>
+    <fieldset name="general" sortOrder="10">
+        <settings>
+            <label translate="true">User Information</label>
+        </settings>
+        <field name="user_id" formElement="input">
+            <settings>
+                <visible>false</visible>
+                <dataType>text</dataType>
+                <dataScope>user_id</dataScope>
+            </settings>
+        </field>
+        <field name="username" formElement="input" sortOrder="10">
+            <settings>
+                <dataType>text</dataType>
+                <label translate="true">Username</label>
+                <dataScope>username</dataScope>
+                <notice translate="true">Unique login name the cashier types on the POS terminal.</notice>
+                <validation>
+                    <rule name="required-entry" xsi:type="boolean">true</rule>
+                    <rule name="max_text_length" xsi:type="number">64</rule>
+                </validation>
+            </settings>
+        </field>
+        <field name="name" formElement="input" sortOrder="20">
+            <settings>
+                <dataType>text</dataType>
+                <label translate="true">Name</label>
+                <dataScope>name</dataScope>
+                <validation>
+                    <rule name="required-entry" xsi:type="boolean">true</rule>
+                </validation>
+            </settings>
+        </field>
+        <field name="email" formElement="input" sortOrder="30">
+            <settings>
+                <dataType>text</dataType>
+                <label translate="true">Email</label>
+                <dataScope>email</dataScope>
+                <validation>
+                    <rule name="required-entry" xsi:type="boolean">true</rule>
+                    <rule name="validate-email" xsi:type="boolean">true</rule>
+                </validation>
+            </settings>
+        </field>
+        <field name="role_id" formElement="select" sortOrder="40">
+            <settings>
+                <dataType>text</dataType>
+                <label translate="true">Role</label>
+                <dataScope>role_id</dataScope>
+                <notice translate="true">Determines the cashier's permissions and maximum discount.</notice>
+            </settings>
+            <formElements>
+                <select>
+                    <settings>
+                        <options class="Panth\MagePos\Model\Config\Source\Roles"/>
+                    </settings>
+                </select>
+            </formElements>
+        </field>
+        <field name="status" formElement="select" sortOrder="50">
+            <argument name="data" xsi:type="array">
+                <item name="config" xsi:type="array">
+                    <item name="default" xsi:type="string">1</item>
+                </item>
+            </argument>
+            <settings>
+                <dataType>int</dataType>
+                <label translate="true">Status</label>
+                <dataScope>status</dataScope>
+            </settings>
+            <formElements>
+                <select>
+                    <settings>
+                        <options>
+                            <option name="enabled" xsi:type="array">
+                                <item name="value" xsi:type="string">1</item>
+                                <item name="label" xsi:type="string" translate="true">Enabled</item>
+                            </option>
+                            <option name="disabled" xsi:type="array">
+                                <item name="value" xsi:type="string">0</item>
+                                <item name="label" xsi:type="string" translate="true">Disabled</item>
+                            </option>
+                        </options>
+                    </settings>
+                </select>
+            </formElements>
+        </field>
+    </fieldset>
+    <fieldset name="credentials" sortOrder="20">
+        <settings>
+            <label translate="true">Credentials</label>
+        </settings>
+        <field name="password" formElement="input" sortOrder="10">
+            <settings>
+                <dataType>text</dataType>
+                <label translate="true">Password</label>
+                <dataScope>password</dataScope>
+                <notice translate="true">Required for a new user. When editing, leave empty to keep the current password. Stored as a secure hash only.</notice>
+                <validation>
+                    <rule name="min_text_length" xsi:type="number">6</rule>
+                </validation>
+            </settings>
+        </field>
+        <field name="pin" formElement="input" sortOrder="20">
+            <settings>
+                <dataType>text</dataType>
+                <label translate="true">PIN</label>
+                <dataScope>pin</dataScope>
+                <notice translate="true">Optional 4-8 digit PIN for fast unlock after idle lock. Leave empty to keep the current PIN. Stored as a secure hash only.</notice>
+                <validation>
+                    <rule name="validate-digits" xsi:type="boolean">true</rule>
+                    <rule name="min_text_length" xsi:type="number">4</rule>
+                    <rule name="max_text_length" xsi:type="number">8</rule>
+                </validation>
+            </settings>
+        </field>
+    </fieldset>
+</form>

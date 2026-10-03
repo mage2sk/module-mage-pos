@@ -1,0 +1,112 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal panel: held carts (spec §9) - parked-cart rows (label, items
+ * count, customer, total, age) with Restore / Delete (two-tap confirm)
+ * actions and an empty state. State lives in Alpine.store('posHolds')
+ * (web/js/pos/holds.js).
+ */
+declare(strict_types=1);
+
+/** @var \Panth\MagePos\Block\Terminal $block */
+/** @var \Magento\Framework\Escaper $escaper */
+?>
+<section class="pos-panel pos-panel--holds"
+         id="pos-panel-holds"
+         data-panel="holds"
+         x-data
+         x-cloak>
+    <header class="pos-panel__header" data-drag-handle>
+        <span class="pos-panel__drag" aria-hidden="true"></span>
+        <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Held Carts')) ?></span>
+        <div class="pos-panel__actions">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost pos-btn--icon"
+                    :disabled="$store.posHolds.loading"
+                    @click="$store.posHolds.load()"
+                    title="<?= $escaper->escapeHtmlAttr(__('Refresh holds')) ?>"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Refresh holds')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-restore"/></svg>
+            </button>
+            <!-- Floating-panel close affordance (UI-fix contract §13a) -->
+            <button type="button"
+                    class="pos-btn pos-btn--ghost pos-btn--icon pos-panel__close"
+                    @click="window.PosLayout && window.PosLayout.closePanel('holds')"
+                    title="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="pos-panel__body">
+        <!-- Empty state -->
+        <div class="pos-empty"
+             x-show="!$store.posHolds.loading && !$store.posHolds.holds.length">
+            <span class="pos-empty__icon" aria-hidden="true">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-empty-holds"/></svg>
+            </span>
+            <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No held carts. Use "Hold" on the cart panel to park a sale.')) ?></span>
+        </div>
+
+        <!-- Hold rows -->
+        <ul class="pos-list" x-show="$store.posHolds.holds.length > 0" style="display:none">
+            <template x-for="hold in $store.posHolds.holds" :key="hold.hold_id">
+                <li class="pos-list__item">
+                    <span class="pos-list__item-info">
+                        <strong x-text="$store.posHolds.holdLabel(hold)"></strong>
+                        <span class="pos-muted">
+                            <span class="pos-badge">
+                                <span class="pos-amount" x-text="$store.posHolds.itemsCount(hold)"></span>&nbsp;<?= $escaper->escapeHtml(__('item(s)')) ?>
+                            </span>
+                            <span x-text="$store.posHolds.customerLabel(hold)"></span>
+                            <span x-text="$store.posHolds.timeLabel(hold)"></span>
+                        </span>
+                    </span>
+                    <span class="pos-list__item-meta">
+                        <span class="pos-amount" x-text="$store.posHolds.totalLabel(hold)"></span>
+                    </span>
+                    <span class="pos-row">
+                        <button type="button"
+                                class="pos-btn pos-btn--primary pos-btn--sm"
+                                :disabled="$store.posHolds.restoringId !== null"
+                                @click.stop="$store.posHolds.restore(hold.hold_id)"
+                                title="<?= $escaper->escapeHtmlAttr(__('Restore this cart')) ?>">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-restore"/></svg>
+                            <span x-show="$store.posHolds.restoringId !== hold.hold_id"><?= $escaper->escapeHtml(__('Restore')) ?></span>
+                            <span x-show="$store.posHolds.restoringId === hold.hold_id" style="display:none"><?= $escaper->escapeHtml(__('Restoring...')) ?></span>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--ghost pos-btn--sm"
+                                x-show="$store.posHolds.confirmDeleteId !== hold.hold_id"
+                                @click.stop="$store.posHolds.askDelete(hold.hold_id)"
+                                title="<?= $escaper->escapeHtmlAttr(__('Delete hold')) ?>"
+                                aria-label="<?= $escaper->escapeHtmlAttr(__('Delete hold')) ?>">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-trash"/></svg>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--danger-solid pos-btn--sm"
+                                x-show="$store.posHolds.confirmDeleteId === hold.hold_id"
+                                style="display:none"
+                                :disabled="$store.posHolds.deletingId !== null"
+                                @click.stop="$store.posHolds.remove(hold.hold_id)"
+                                title="<?= $escaper->escapeHtmlAttr(__('Confirm delete')) ?>">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-trash"/></svg>
+                            <?= $escaper->escapeHtml(__('Confirm')) ?>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--ghost pos-btn--sm"
+                                x-show="$store.posHolds.confirmDeleteId === hold.hold_id"
+                                style="display:none"
+                                @click.stop="$store.posHolds.cancelDelete()"
+                                title="<?= $escaper->escapeHtmlAttr(__('Cancel delete')) ?>"
+                                aria-label="<?= $escaper->escapeHtmlAttr(__('Cancel delete')) ?>">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-x"/></svg>
+                        </button>
+                    </span>
+                </li>
+            </template>
+        </ul>
+    </div>
+</section>

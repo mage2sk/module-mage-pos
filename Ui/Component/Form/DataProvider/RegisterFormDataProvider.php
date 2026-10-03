@@ -1,0 +1,45 @@
+<?php
+declare(strict_types=1);
+
+namespace Panth\MagePos\Ui\Component\Form\DataProvider;
+
+use Magento\Ui\DataProvider\AbstractDataProvider;
+use Panth\MagePos\Model\ResourceModel\Register\CollectionFactory;
+
+class RegisterFormDataProvider extends AbstractDataProvider
+{
+    private ?array $loadedData = null;
+
+    public function __construct(
+        string $name,
+        string $primaryFieldName,
+        string $requestFieldName,
+        CollectionFactory $collectionFactory,
+        array $meta = [],
+        array $data = []
+    ) {
+        $this->collection = $collectionFactory->create();
+        parent::__construct($name, $primaryFieldName, $requestFieldName, $meta, $data);
+    }
+
+    public function getData(): array
+    {
+        if ($this->loadedData !== null) {
+            return $this->loadedData;
+        }
+
+        $this->loadedData = [];
+        foreach ($this->collection->getItems() as $register) {
+            $this->loadedData[$register->getId()] = $register->getData();
+        }
+
+        if (empty($this->loadedData)) {
+            $this->loadedData[''] = [
+                'status' => '1',
+                'store_id' => '1',
+            ];
+        }
+
+        return $this->loadedData;
+    }
+}

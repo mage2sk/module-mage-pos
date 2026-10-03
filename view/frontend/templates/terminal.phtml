@@ -1,0 +1,205 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS terminal SPA - full standalone HTML document (spec §9).
+ * Rendered via Raw result by Controller\Terminal\Index, NOT through the
+ * theme layout, so it is identical on Hyva and Luma.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+declare(strict_types=1);
+
+// Pinned script load order (spec §9). All scripts use `defer`, so they
+// execute in document order after parsing. Alpine's CDN build calls
+// Alpine.start() in a microtask immediately after its own script executes,
+// so it MUST load last - every component file registers its pieces via
+// `alpine:init` listeners / window globals beforehand.
+$jsFiles = [
+    'vendor/qrcode.min.js',
+    'pos/api.js',
+    'pos/offline.js',
+    'pos/keypad.js',
+    'pos/catalog.js',
+    'pos/cart.js',
+    'pos/checkout.js',
+    'pos/customer.js',
+    'pos/register.js',
+    'pos/holds.js',
+    'pos/orders.js',
+    'pos/receipt.js',
+    'pos/layout.js',
+    'pos/app.js',
+    'vendor/alpine.min.js',
+];
+$panels = ['catalog', 'cart', 'customer', 'quickkeys', 'holds', 'session'];
+$modals = ['checkout', 'customer', 'product', 'options', 'refund', 'session', 'settings', 'layout', 'receipt'];
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="robots" content="noindex,nofollow">
+    <title><?= $escaper->escapeHtml($block->getStoreName()) ?> - <?= $escaper->escapeHtml(__('Point of Sale')) ?></title>
+    <link rel="preload" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::fonts/bricolage-grotesque-400.woff2')) ?>" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::fonts/bricolage-grotesque-800.woff2')) ?>" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::fonts/schibsted-grotesk-400.woff2')) ?>" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::fonts/schibsted-grotesk-500.woff2')) ?>" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::css/fonts.css')) ?>">
+    <link rel="stylesheet" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::css/pos.css')) ?>">
+    <style>[x-cloak]{display:none !important;}</style>
+    <script>
+        // Warm every bundled @font-face. Faces the shell never paints at boot
+        // (Bricolage 400, Schibsted 500) would otherwise stay status:"unloaded"
+        // forever and document.fonts.check() at the default weight would fail.
+        // This inline script runs after fonts.css is applied (stylesheets block
+        // later scripts), so all six faces are registered when load() is called.
+        (function () {
+            if (!('fonts' in document) || typeof document.fonts.load !== 'function') {
+                return;
+            }
+            [
+                '400 16px "Bricolage Grotesque"',
+                '600 16px "Bricolage Grotesque"',
+                '800 16px "Bricolage Grotesque"',
+                '400 16px "Schibsted Grotesk"',
+                '500 16px "Schibsted Grotesk"',
+                '700 16px "Schibsted Grotesk"'
+            ].forEach(function (font) {
+                document.fonts.load(font).catch(function () {});
+            });
+        })();
+    </script>
+    <script id="pos-config" type="application/json"><?= /* @noEscape */ $block->getConfigJson() ?></script>
+<?php foreach ($jsFiles as $jsFile): ?>
+    <script defer src="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::js/' . $jsFile)) ?>"></script>
+<?php endforeach; ?>
+</head>
+<body class="pos-body"
+      x-data="posApp()"
+      :data-theme="$store.pos.theme && $store.pos.theme.mode ? $store.pos.theme.mode : 'light'"
+      :class="{'pos-body--edit': $store.pos.layoutEdit}">
+
+    <!-- Inline SVG icon sprite (symbols referenced via <use href="#pi-*">) -->
+    <?= /* @noEscape */ $block->fetchView($block->getTemplateFile('Panth_MagePos::terminal/icons.phtml')) ?>
+
+    <!-- Boot splash (shown until GET pos/auth/state resolves) -->
+    <div class="pos-splash" x-show="$store.pos.view === 'loading'">
+        <div class="pos-splash__inner">
+            <span class="pos-splash__spinner" aria-hidden="true"></span>
+            <span><?= $escaper->escapeHtml(__('Loading POS...')) ?></span>
+        </div>
+    </div>
+
+    <!-- Login screen + PIN lock overlay -->
+    <?= /* @noEscape */ $block->fetchView($block->getTemplateFile('Panth_MagePos::terminal/login.phtml')) ?>
+
+    <!-- Main application -->
+    <div class="pos-app" x-show="$store.pos.view === 'sale'" x-cloak>
+        <?= /* @noEscape */ $block->fetchView($block->getTemplateFile('Panth_MagePos::terminal/header.phtml')) ?>
+
+        <main class="pos-grid" id="pos-grid">
+            <!-- Movable toolbar block (UI-fix contract §18: the header action
+                 cluster is a first-class draggable block). data-panel="toolbar"
+                 is managed by layout.js. HIDDEN by default per contract §27 -
+                 Holds/Orders/Session/Settings/Layout/Lock/Exit live compactly
+                 in the header bar (header.phtml, the always-present launcher);
+                 users can re-enable this block in Layout, where it renders the
+                 same actions as a workspace strip. Markup must stay present so
+                 the layout registry / edit-mode ghost can place it. -->
+            <section class="pos-panel pos-panel--toolbar"
+                     id="pos-panel-toolbar"
+                     data-panel="toolbar"
+                     x-data
+                     x-cloak>
+                <header class="pos-panel__header" data-drag-handle>
+                    <span class="pos-panel__drag" aria-hidden="true"></span>
+                    <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Actions')) ?></span>
+                </header>
+                <?php /* Item 26: the icon+label buttons are DIRECT children of
+                         .pos-panel__body - pos.css sizes the toolbar block via
+                         `.pos-panel--toolbar .pos-panel__body` (flex row, wrap,
+                         gap + padding tokens). The old .pos-denominations
+                         wrapper + --flush modifier defeated that rule and
+                         cramped the row. */ ?>
+                <div class="pos-panel__body">
+                        <button type="button"
+                                class="pos-btn pos-btn--icon"
+                                :class="{ 'pos-btn--active': $store.pos.panels.holds }"
+                                :aria-pressed="$store.pos.panels.holds ? 'true' : 'false'"
+                                @click="window.dispatchEvent(new CustomEvent('pos:toggle-panel', { detail: { panel: 'holds' } }))"
+                                title="<?= $escaper->escapeHtmlAttr(__('Held carts')) ?>">
+                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-hold"/></svg>
+                            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Holds')) ?></span>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--icon"
+                                @click="$store.posOrders.openModal()"
+                                title="<?= $escaper->escapeHtmlAttr(__('Orders / Refunds')) ?>">
+                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-receipt"/></svg>
+                            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Orders')) ?></span>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--icon"
+                                :class="{ 'pos-btn--active': $store.pos.panels.session }"
+                                :aria-pressed="$store.pos.panels.session ? 'true' : 'false'"
+                                @click="window.dispatchEvent(new CustomEvent('pos:toggle-panel', { detail: { panel: 'session' } }))"
+                                title="<?= $escaper->escapeHtmlAttr(__('Register session')) ?>">
+                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-report"/></svg>
+                            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Session')) ?></span>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--icon"
+                                @click="$store.pos.openModal('settings')"
+                                title="<?= $escaper->escapeHtmlAttr(__('Settings')) ?>">
+                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-settings"/></svg>
+                            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Settings')) ?></span>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--icon"
+                                x-show="$store.pos.hasPermission('can_edit_layout')"
+                                :class="{ 'pos-btn--active': $store.pos.layoutEdit }"
+                                @click="$store.pos.openModal('layout')"
+                                title="<?= $escaper->escapeHtmlAttr(__('Layout')) ?>"
+                                x-cloak>
+                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-layout"/></svg>
+                            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Layout')) ?></span>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--icon"
+                                @click="$store.pos.lock()"
+                                title="<?= $escaper->escapeHtmlAttr(__('Lock terminal')) ?>">
+                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-lock"/></svg>
+                            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Lock')) ?></span>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--icon pos-btn--danger"
+                                @click="$store.pos.logout()"
+                                aria-label="<?= $escaper->escapeHtmlAttr(__('Log out')) ?>"
+                                title="<?= $escaper->escapeHtmlAttr(__('Log out')) ?>">
+                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-logout"/></svg>
+                            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Exit')) ?></span>
+                        </button>
+                </div>
+            </section>
+<?php foreach ($panels as $panel): ?>
+            <?= /* @noEscape */ $block->fetchView($block->getTemplateFile('Panth_MagePos::terminal/panel-' . $panel . '.phtml')) ?>
+<?php endforeach; ?>
+        </main>
+    </div>
+
+    <!-- Modals -->
+<?php foreach ($modals as $modal): ?>
+    <?= /* @noEscape */ $block->fetchView($block->getTemplateFile('Panth_MagePos::terminal/modal-' . $modal . '.phtml')) ?>
+<?php endforeach; ?>
+
+    <!-- Toasts (Alpine store: $store.pos.notify(message, type)) -->
+    <div class="pos-toasts" aria-live="polite">
+        <template x-for="toast in $store.pos.toasts" :key="toast.id">
+            <div class="pos-toast" :class="'pos-toast--' + toast.type" x-text="toast.message"></div>
+        </template>
+    </div>
+</body>
+</html>

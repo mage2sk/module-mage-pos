@@ -1,0 +1,60 @@
+{
+    "name": "mage2kishan/module-mage-pos",
+    "description": "Panth MagePos - a full point of sale (POS) for Magento 2. Standalone touch-friendly terminal with cashier authentication and PIN lock, register sessions with cash management and X/Z reports, barcode scanning, quick keys, multi-cart hold/retrieve, discounts with per-role caps, custom sale lines, split payments (cash, offline and online methods), 80mm receipts, refunds, offline mode with order sync, and a drag-and-drop layout editor.",
+    "type": "magento2-module",
+    "version": "1.0.13",
+    "license": "MIT",
+    "keywords": [
+        "magento2",
+        "magento2-module",
+        "magento-pos",
+        "pos",
+        "point-of-sale",
+        "pos-system",
+        "epos",
+        "till",
+        "cash-register",
+        "barcode",
+        "receipt",
+        "offline-pos",
+        "omnichannel",
+        "retail",
+        "hyva",
+        "hyva-compatible",
+        "luma",
+        "panth"
+    ],
+    "homepage": "https://kishansavaliya.com",
+    "support": {
+        "email": "kishansavaliyakb@gmail.com",
+        "source": "https://kishansavaliya.com"
+    },
+    "authors": [
+        {
+            "name": "Kishan Savaliya",
+            "email": "kishansavaliyakb@gmail.com",
+            "homepage": "https://kishansavaliya.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "~8.1.0||~8.2.0||~8.3.0||~8.4.0",
+        "magento/framework": "^103.0",
+        "magento/module-sales": "^103.0",
+        "magento/module-quote": "^101.2",
+        "magento/module-catalog": "^104.0",
+        "magento/module-customer": "^103.0",
+        "magento/module-payment": "^100.4",
+        "magento/module-backend": "^102.0",
+        "magento/module-ui": "^101.2",
+        "mage2kishan/module-core": "^1.0"
+    },
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "Panth\\MagePos\\": ""
+        }
+    }
+}

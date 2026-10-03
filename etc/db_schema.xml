@@ -1,0 +1,349 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Panth_MagePos declarative schema - 11 POS tables plus two columns added
+ * to the core "quote" table that carry the POS cart-level discount
+ * (consumed by the Model\Quote\Total\PosDiscount total collector).
+ */
+-->
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+
+    <!-- 1. Registers (physical POS terminals / tills) -->
+    <table name="panth_pos_register" resource="default" engine="innodb"
+           comment="Panth MagePos - POS registers (terminals)">
+        <column xsi:type="int" name="register_id" unsigned="true" nullable="false" identity="true"
+                comment="Register ID"/>
+        <column xsi:type="varchar" name="name" nullable="false" length="255" comment="Register name"/>
+        <column xsi:type="varchar" name="code" nullable="false" length="64" comment="Unique register code"/>
+        <column xsi:type="smallint" name="store_id" unsigned="true" nullable="false" default="0"
+                comment="Store view this register sells for"/>
+        <column xsi:type="smallint" name="status" unsigned="true" nullable="false" default="1"
+                comment="1 enabled | 0 disabled"/>
+        <column xsi:type="text" name="receipt_header" nullable="true" comment="Register-specific receipt header"/>
+        <column xsi:type="text" name="receipt_footer" nullable="true" comment="Register-specific receipt footer"/>
+        <column xsi:type="varchar" name="source_code" nullable="true" length="255"
+                comment="MSI inventory_source.source_code this register deducts/checks salability against (NULL = Magento default stock)"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="register_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PANTH_POS_REGISTER_CODE">
+            <column name="code"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_REGISTER_STORE_ID_STORE_STORE_ID"
+                    table="panth_pos_register" column="store_id"
+                    referenceTable="store" referenceColumn="store_id"
+                    onDelete="CASCADE"/>
+    </table>
+
+    <!-- 2. Roles (declared before users - users FK to roles) -->
+    <table name="panth_pos_role" resource="default" engine="innodb"
+           comment="Panth MagePos - cashier roles and permissions">
+        <column xsi:type="int" name="role_id" unsigned="true" nullable="false" identity="true"
+                comment="Role ID"/>
+        <column xsi:type="varchar" name="name" nullable="false" length="128" comment="Role name"/>
+        <column xsi:type="text" name="permissions" nullable="false"
+                comment="JSON permission map (max_discount_percent, can_price_override, can_refund, can_open_close, can_cash_inout, can_custom_product, can_edit_layout, can_view_reports)"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="role_id"/>
+        </constraint>
+    </table>
+
+    <!-- 3. POS users (cashiers) -->
+    <table name="panth_pos_user" resource="default" engine="innodb"
+           comment="Panth MagePos - POS users (cashiers)">
+        <column xsi:type="int" name="user_id" unsigned="true" nullable="false" identity="true"
+                comment="User ID"/>
+        <column xsi:type="varchar" name="username" nullable="false" length="64" comment="Unique login username"/>
+        <column xsi:type="varchar" name="name" nullable="false" length="255" comment="Display name"/>
+        <column xsi:type="varchar" name="email" nullable="false" length="255" comment="Email address"/>
+        <column xsi:type="varchar" name="password_hash" nullable="false" length="255"
+                comment="password_hash() PASSWORD_DEFAULT hash"/>
+        <column xsi:type="varchar" name="pin_hash" nullable="true" length="255"
+                comment="Fast-unlock PIN hash (password_hash)"/>
+        <column xsi:type="int" name="role_id" unsigned="true" nullable="true"
+                comment="FK panth_pos_role.role_id"/>
+        <column xsi:type="smallint" name="status" unsigned="true" nullable="false" default="1"
+                comment="1 enabled | 0 disabled"/>
+        <column xsi:type="timestamp" name="last_login_at" on_update="false" nullable="true"
+                comment="Last successful login (UTC)"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="user_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PANTH_POS_USER_USERNAME">
+            <column name="username"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_USER_ROLE_ID_PANTH_POS_ROLE_ROLE_ID"
+                    table="panth_pos_user" column="role_id"
+                    referenceTable="panth_pos_role" referenceColumn="role_id"
+                    onDelete="SET NULL"/>
+    </table>
+
+    <!-- 4. Register sessions (open float -> Z close) -->
+    <table name="panth_pos_session" resource="default" engine="innodb"
+           comment="Panth MagePos - register sessions (open/close, Z report)">
+        <column xsi:type="int" name="session_id" unsigned="true" nullable="false" identity="true"
+                comment="Session ID"/>
+        <column xsi:type="int" name="register_id" unsigned="true" nullable="false"
+                comment="FK panth_pos_register.register_id"/>
+        <column xsi:type="int" name="user_id" unsigned="true" nullable="false"
+                comment="FK panth_pos_user.user_id (opener)"/>
+        <column xsi:type="varchar" name="status" nullable="false" length="16" default="open"
+                comment="open | closed"/>
+        <column xsi:type="decimal" name="opening_float" scale="4" precision="12" unsigned="false" nullable="false"
+                default="0" comment="Opening cash float"/>
+        <column xsi:type="decimal" name="expected_cash" scale="4" precision="12" unsigned="false" nullable="true"
+                comment="Expected cash at close (sum of signed movements)"/>
+        <column xsi:type="decimal" name="counted_cash" scale="4" precision="12" unsigned="false" nullable="true"
+                comment="Cash counted at close"/>
+        <column xsi:type="decimal" name="over_short" scale="4" precision="12" unsigned="false" nullable="true"
+                comment="counted_cash - expected_cash"/>
+        <column xsi:type="text" name="totals_json" nullable="true" comment="Z report snapshot JSON"/>
+        <column xsi:type="timestamp" name="opened_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Opened at (UTC)"/>
+        <column xsi:type="timestamp" name="closed_at" on_update="false" nullable="true" comment="Closed at (UTC)"/>
+        <column xsi:type="text" name="note" nullable="true" comment="Open/close note"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="session_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_SESSION_REGISTER_ID_PANTH_POS_REGISTER_REGISTER_ID"
+                    table="panth_pos_session" column="register_id"
+                    referenceTable="panth_pos_register" referenceColumn="register_id"
+                    onDelete="CASCADE"/>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_SESSION_USER_ID_PANTH_POS_USER_USER_ID"
+                    table="panth_pos_session" column="user_id"
+                    referenceTable="panth_pos_user" referenceColumn="user_id"
+                    onDelete="CASCADE"/>
+        <index referenceId="PANTH_POS_SESSION_REGISTER_ID_STATUS" indexType="btree">
+            <column name="register_id"/>
+            <column name="status"/>
+        </index>
+    </table>
+
+    <!-- 5. Cash drawer movements (SIGNED amounts) -->
+    <table name="panth_pos_cash_movement" resource="default" engine="innodb"
+           comment="Panth MagePos - cash drawer movements (signed amounts)">
+        <column xsi:type="int" name="movement_id" unsigned="true" nullable="false" identity="true"
+                comment="Movement ID"/>
+        <column xsi:type="int" name="session_id" unsigned="true" nullable="false"
+                comment="FK panth_pos_session.session_id"/>
+        <column xsi:type="int" name="user_id" unsigned="true" nullable="false"
+                comment="POS user who recorded the movement"/>
+        <column xsi:type="varchar" name="type" nullable="false" length="16"
+                comment="float | sale | refund | in | out | close"/>
+        <column xsi:type="decimal" name="amount" scale="4" precision="12" unsigned="false" nullable="false"
+                comment="SIGNED amount (in/sale/float positive, out/refund negative)"/>
+        <column xsi:type="varchar" name="reason" nullable="true" length="255" comment="Reason / memo"/>
+        <column xsi:type="int" name="order_id" unsigned="true" nullable="true"
+                comment="Related sales_order.entity_id when type sale/refund"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="movement_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_CASH_MOVEMENT_SESSION_ID_PANTH_POS_SESSION_SESSION_ID"
+                    table="panth_pos_cash_movement" column="session_id"
+                    referenceTable="panth_pos_session" referenceColumn="session_id"
+                    onDelete="CASCADE"/>
+        <index referenceId="PANTH_POS_CASH_MOVEMENT_SESSION_ID" indexType="btree">
+            <column name="session_id"/>
+        </index>
+    </table>
+
+    <!-- 6. POS payment methods (admin-defined tender types) -->
+    <table name="panth_pos_payment_method" resource="default" engine="innodb"
+           comment="Panth MagePos - POS payment methods (tender types)">
+        <column xsi:type="int" name="method_id" unsigned="true" nullable="false" identity="true"
+                comment="Method ID"/>
+        <column xsi:type="varchar" name="code" nullable="false" length="64" comment="Unique method code"/>
+        <column xsi:type="varchar" name="title" nullable="false" length="255" comment="Display title"/>
+        <column xsi:type="varchar" name="type" nullable="false" length="16" comment="cash | offline | online"/>
+        <column xsi:type="smallint" name="is_active" unsigned="true" nullable="false" default="1"
+                comment="1 active | 0 inactive"/>
+        <column xsi:type="int" name="sort_order" unsigned="false" nullable="false" default="0" comment="Sort order"/>
+        <column xsi:type="varchar" name="icon" nullable="true" length="64" comment="Emoji or CSS class"/>
+        <column xsi:type="smallint" name="requires_reference" unsigned="true" nullable="false" default="0"
+                comment="1 = cashier must enter a reference"/>
+        <column xsi:type="text" name="instructions" nullable="true" comment="Cashier-facing instructions"/>
+        <column xsi:type="smallint" name="open_drawer" unsigned="true" nullable="false" default="0"
+                comment="1 = open cash drawer on tender"/>
+        <column xsi:type="varchar" name="payment_url_template" nullable="true" length="512"
+                comment="Online: URL template with %increment_id%/%amount% tokens (rendered as QR)"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="method_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PANTH_POS_PAYMENT_METHOD_CODE">
+            <column name="code"/>
+        </constraint>
+    </table>
+
+    <!-- 7. POS order link (sales_order ↔ POS metadata) -->
+    <table name="panth_pos_order" resource="default" engine="innodb"
+           comment="Panth MagePos - POS metadata per sales order">
+        <column xsi:type="int" name="pos_order_id" unsigned="true" nullable="false" identity="true"
+                comment="POS Order ID"/>
+        <column xsi:type="int" name="order_id" unsigned="true" nullable="false"
+                comment="FK sales_order.entity_id"/>
+        <column xsi:type="int" name="session_id" unsigned="true" nullable="false"
+                comment="FK panth_pos_session.session_id"/>
+        <column xsi:type="int" name="register_id" unsigned="true" nullable="false" comment="Register ID"/>
+        <column xsi:type="int" name="pos_user_id" unsigned="true" nullable="false" comment="Cashier user ID"/>
+        <column xsi:type="varchar" name="receipt_number" nullable="false" length="64"
+                comment="Receipt number ({register_code}-{session_id}-{seq})"/>
+        <column xsi:type="varchar" name="receipt_token" nullable="true" length="64"
+                comment="Cryptographically random receipt access token (bin2hex(random_bytes(16))); receipt access is gated on hash_equals against this, never the guessable receipt_number"/>
+        <column xsi:type="varchar" name="client_uuid" nullable="true" length="64"
+                comment="Client UUID for offline sync dedupe"/>
+        <column xsi:type="smallint" name="is_offline_sync" unsigned="true" nullable="false" default="0"
+                comment="1 = order created via offline queue sync"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="pos_order_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PANTH_POS_ORDER_ORDER_ID">
+            <column name="order_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PANTH_POS_ORDER_CLIENT_UUID">
+            <column name="client_uuid"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_ORDER_ORDER_ID_SALES_ORDER_ENTITY_ID"
+                    table="panth_pos_order" column="order_id"
+                    referenceTable="sales_order" referenceColumn="entity_id"
+                    onDelete="CASCADE"/>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_ORDER_SESSION_ID_PANTH_POS_SESSION_SESSION_ID"
+                    table="panth_pos_order" column="session_id"
+                    referenceTable="panth_pos_session" referenceColumn="session_id"
+                    onDelete="CASCADE"/>
+        <index referenceId="PANTH_POS_ORDER_SESSION_ID" indexType="btree">
+            <column name="session_id"/>
+        </index>
+        <index referenceId="PANTH_POS_ORDER_POS_USER_ID" indexType="btree">
+            <column name="pos_user_id"/>
+        </index>
+    </table>
+
+    <!-- 8. Split-payment rows per POS order -->
+    <table name="panth_pos_order_payment" resource="default" engine="innodb"
+           comment="Panth MagePos - split payment rows per POS order">
+        <column xsi:type="int" name="payment_id" unsigned="true" nullable="false" identity="true"
+                comment="Payment ID"/>
+        <column xsi:type="int" name="pos_order_id" unsigned="true" nullable="false"
+                comment="FK panth_pos_order.pos_order_id"/>
+        <column xsi:type="varchar" name="method_code" nullable="false" length="64" comment="POS method code"/>
+        <column xsi:type="varchar" name="method_title" nullable="false" length="255" comment="POS method title"/>
+        <column xsi:type="decimal" name="amount" scale="4" precision="12" unsigned="false" nullable="false"
+                comment="Tendered amount (change row stored negative)"/>
+        <column xsi:type="varchar" name="reference" nullable="true" length="255"
+                comment="External reference (terminal/check number)"/>
+        <column xsi:type="smallint" name="is_change" unsigned="true" nullable="false" default="0"
+                comment="1 = change-given row (negative amount)"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="payment_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PANTH_POS_ORDER_PAYMENT_POS_ORDER_ID"
+                    table="panth_pos_order_payment" column="pos_order_id"
+                    referenceTable="panth_pos_order" referenceColumn="pos_order_id"
+                    onDelete="CASCADE"/>
+    </table>
+
+    <!-- 9. Held carts -->
+    <table name="panth_pos_hold" resource="default" engine="innodb"
+           comment="Panth MagePos - held carts (park/retrieve)">
+        <column xsi:type="int" name="hold_id" unsigned="true" nullable="false" identity="true"
+                comment="Hold ID"/>
+        <column xsi:type="int" name="register_id" unsigned="true" nullable="false" comment="Register ID"/>
+        <column xsi:type="int" name="user_id" unsigned="true" nullable="false" comment="POS user ID"/>
+        <column xsi:type="varchar" name="label" nullable="false" length="255" comment="Hold label"/>
+        <column xsi:type="int" name="customer_id" unsigned="true" nullable="true" comment="Attached customer ID"/>
+        <column xsi:type="text" name="cart_json" nullable="false" comment="Serialized cart snapshot JSON"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="hold_id"/>
+        </constraint>
+        <index referenceId="PANTH_POS_HOLD_REGISTER_ID" indexType="btree">
+            <column name="register_id"/>
+        </index>
+    </table>
+
+    <!-- 10. Quick keys (favorite product tiles) -->
+    <table name="panth_pos_quick_key" resource="default" engine="innodb"
+           comment="Panth MagePos - quick keys (favorite product tiles)">
+        <column xsi:type="int" name="quick_key_id" unsigned="true" nullable="false" identity="true"
+                comment="Quick Key ID"/>
+        <column xsi:type="int" name="register_id" unsigned="true" nullable="true"
+                comment="Register ID (NULL = all registers)"/>
+        <column xsi:type="int" name="product_id" unsigned="true" nullable="false" comment="Product entity ID"/>
+        <column xsi:type="varchar" name="label" nullable="true" length="128" comment="Tile label override"/>
+        <column xsi:type="varchar" name="color" nullable="true" length="16" comment="Tile color (hex/css)"/>
+        <column xsi:type="int" name="position" unsigned="false" nullable="false" default="0" comment="Tile position"/>
+        <column xsi:type="smallint" name="page" unsigned="true" nullable="false" default="1" comment="Tile page"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="quick_key_id"/>
+        </constraint>
+    </table>
+
+    <!-- 11. Per-user terminal preferences (layout + theme) -->
+    <table name="panth_pos_user_preference" resource="default" engine="innodb"
+           comment="Panth MagePos - per-user terminal layout/theme preferences">
+        <column xsi:type="int" name="preference_id" unsigned="true" nullable="false" identity="true"
+                comment="Preference ID"/>
+        <column xsi:type="int" name="user_id" unsigned="true" nullable="false" comment="POS user ID"/>
+        <column xsi:type="text" name="layout_json" nullable="true" comment="Panel layout JSON (24-col grid)"/>
+        <column xsi:type="text" name="theme_json" nullable="true" comment="Theme settings JSON"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Created at"/>
+        <column xsi:type="timestamp" name="updated_at" on_update="true" nullable="false" default="CURRENT_TIMESTAMP"
+                comment="Updated at"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="preference_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PANTH_POS_USER_PREFERENCE_USER_ID">
+            <column name="user_id"/>
+        </constraint>
+    </table>
+
+    <!-- POS cart discount columns on the core quote table
+         (read by Model\Quote\Total\PosDiscount total collector) plus the
+         POS-ownership marker stamped by Service\CartService::create() -
+         terminal endpoints refuse to operate on quotes without it (IDOR guard) -->
+    <table name="quote" resource="checkout" engine="innodb" comment="Sales Flat Quote">
+        <column xsi:type="varchar" name="panth_pos_discount_type" nullable="true" length="16"
+                comment="Panth MagePos cart discount type (percent|fixed)"/>
+        <column xsi:type="decimal" name="panth_pos_discount_value" scale="4" precision="12" unsigned="false"
+                nullable="true" comment="Panth MagePos cart discount value"/>
+        <column xsi:type="int" name="panth_pos_register_id" unsigned="true" nullable="true"
+                comment="Panth MagePos POS-owned quote marker: creating register ID, 0 = POS quote without register (NULL = not a POS cart)"/>
+    </table>
+</schema>

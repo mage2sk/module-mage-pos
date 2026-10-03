@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ */
+-->
+<listing xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Ui:etc/ui_configuration.xsd">
+    <argument name="data" xsi:type="array">
+        <item name="js_config" xsi:type="array">
+            <item name="provider" xsi:type="string">panth_pos_method_listing.panth_pos_method_listing_data_source</item>
+        </item>
+    </argument>
+    <settings>
+        <spinner>panth_pos_method_listing_columns</spinner>
+        <deps>
+            <dep>panth_pos_method_listing.panth_pos_method_listing_data_source</dep>
+        </deps>
+        <buttons>
+            <button name="add">
+                <url path="*/*/new"/>
+                <class>primary</class>
+                <label translate="true">Add New Payment Method</label>
+            </button>
+        </buttons>
+    </settings>
+    <dataSource name="panth_pos_method_listing_data_source" component="Magento_Ui/js/grid/provider">
+        <settings>
+            <storageConfig>
+                <param name="indexField" xsi:type="string">method_id</param>
+            </storageConfig>
+            <updateUrl path="mui/index/render"/>
+        </settings>
+        <aclResource>Panth_MagePos::methods</aclResource>
+        <dataProvider class="Panth\MagePos\Ui\MethodGridDataProvider" name="panth_pos_method_listing_data_source">
+            <settings>
+                <requestFieldName>id</requestFieldName>
+                <primaryFieldName>method_id</primaryFieldName>
+            </settings>
+        </dataProvider>
+    </dataSource>
+    <listingToolbar name="listing_top">
+        <bookmark name="bookmarks"/>
+        <columnsControls name="columns_controls"/>
+        <filterSearch name="fulltext"/>
+        <filters name="listing_filters"/>
+        <paging name="listing_paging"/>
+    </listingToolbar>
+    <columns name="panth_pos_method_listing_columns">
+        <column name="method_id" sortOrder="10">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">ID</label>
+                <sorting>asc</sorting>
+            </settings>
+        </column>
+        <column name="code" sortOrder="20">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">Code</label>
+            </settings>
+        </column>
+        <column name="title" sortOrder="30">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">Title</label>
+            </settings>
+        </column>
+        <column name="type" component="Magento_Ui/js/grid/columns/select" sortOrder="40">
+            <settings>
+                <filter>select</filter>
+                <options class="Panth\MagePos\Model\Config\Source\MethodType"/>
+                <dataType>select</dataType>
+                <label translate="true">Type</label>
+            </settings>
+        </column>
+        <column name="icon" sortOrder="50">
+            <settings>
+                <label translate="true">Icon</label>
+                <sortable>false</sortable>
+            </settings>
+        </column>
+        <column name="is_active" component="Magento_Ui/js/grid/columns/select" sortOrder="60">
+            <settings>
+                <filter>select</filter>
+                <options class="Magento\Config\Model\Config\Source\Yesno"/>
+                <dataType>select</dataType>
+                <label translate="true">Active</label>
+            </settings>
+        </column>
+        <column name="requires_reference" component="Magento_Ui/js/grid/columns/select" sortOrder="70">
+            <settings>
+                <filter>select</filter>
+                <options class="Magento\Config\Model\Config\Source\Yesno"/>
+                <dataType>select</dataType>
+                <label translate="true">Requires Reference</label>
+            </settings>
+        </column>
+        <column name="open_drawer" component="Magento_Ui/js/grid/columns/select" sortOrder="80">
+            <settings>
+                <filter>select</filter>
+                <options class="Magento\Config\Model\Config\Source\Yesno"/>
+                <dataType>select</dataType>
+                <label translate="true">Opens Drawer</label>
+            </settings>
+        </column>
+        <column name="sort_order" sortOrder="90">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">Sort Order</label>
+            </settings>
+        </column>
+        <column name="created_at" class="Magento\Ui\Component\Listing\Columns\Date" component="Magento_Ui/js/grid/columns/date" sortOrder="100">
+            <settings>
+                <filter>dateRange</filter>
+                <dataType>date</dataType>
+                <label translate="true">Created</label>
+            </settings>
+        </column>
+        <actionsColumn name="actions" class="Panth\MagePos\Ui\Component\Listing\Column\MethodActions" sortOrder="110">
+            <settings>
+                <indexField>method_id</indexField>
+            </settings>
+        </actionsColumn>
+    </columns>
+</listing>

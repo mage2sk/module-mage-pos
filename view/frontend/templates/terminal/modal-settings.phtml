@@ -1,0 +1,271 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal settings modal (spec §9):
+ * - Appearance: light/dark theme, accent colour swatches + custom picker,
+ *   density, button scale and font scale sliders - all applied LIVE as
+ *   CSS custom properties by js/pos/layout.js ($store.posLayout).
+ * - Behavior: idle auto-lock display + sound-on-scan toggles.
+ * Everything is persisted in panth_pos_user_preference.theme_json via
+ * POST pos/preference/save.
+ *
+ * Opened with $store.pos.openModal('settings') (see header.phtml).
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+declare(strict_types=1);
+?>
+<style>
+    /* Settings-modal a11y hardening (touch targets + AA contrast).
+       Scoped overrides of pos.css component defaults - pos.css is owned
+       by the design-system lead; these selectors only reach the settings
+       modal anatomy (.pos-settings__*) and use existing tokens only. */
+
+    /* Touch targets: segmented control buttons >= 48px tall (brief: every
+       interactive target >= 48px; --pos-control-h = 48px x btn-scale). */
+    .pos-settings__control .pos-segment__btn {
+        min-height: max(48px, var(--pos-control-h));
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    /* Touch targets: accent swatches 48x48 (were 36x36). */
+    .pos-settings__control .pos-swatch {
+        width: 48px;
+        height: 48px;
+    }
+
+    .pos-settings__control .pos-swatch--custom input[type="color"] {
+        inset: -8px;
+        width: 64px;
+        height: 64px;
+    }
+
+    /* Touch targets: sliders get a 44px-tall hit area while the visible
+       track stays the slim 8px bar (drawn on the track pseudo-elements
+       instead of the input element itself). */
+    .pos-settings__control .pos-slider {
+        height: 44px;
+        margin: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .pos-settings__control .pos-slider::-webkit-slider-runnable-track {
+        height: 8px;
+        border-radius: 99px;
+        background: var(--pos-surface-3);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .pos-settings__control .pos-slider::-webkit-slider-thumb {
+        margin-top: -9px; /* center 26px thumb on 8px track */
+    }
+
+    .pos-settings__control .pos-slider::-moz-range-track {
+        height: 8px;
+        border-radius: 99px;
+        background: var(--pos-surface-3);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Contrast: section headings were --pos-text-faint (~3:1 both themes);
+       --pos-text-muted is AA on surface in both themes. */
+    .pos-settings__heading {
+        color: var(--pos-text-muted);
+    }
+
+    /* Contrast (dark): active segment label rendered raw accent (~3:1 with
+       blue accents at 13px). Lift toward white like .pos-settings__value. */
+    [data-theme="dark"] .pos-settings__control .pos-segment__btn.is-active {
+        color: color-mix(in oklch, var(--pos-accent) 65%, #ffffff);
+    }
+</style>
+<div class="pos-modal-backdrop"
+     x-show="$store.posLayout.isModalOpen('settings')"
+     x-cloak
+     @click.self="$store.posLayout.closeSettings()"
+     @keydown.escape.window="$store.posLayout.isModalOpen('settings') && $store.posLayout.closeSettings()">
+    <div class="pos-modal pos-modal--md"
+         role="dialog"
+         aria-modal="true"
+         aria-label="<?= $escaper->escapeHtmlAttr(__('Terminal settings')) ?>">
+
+        <div class="pos-modal__header">
+            <h2 class="pos-modal__title"><?= $escaper->escapeHtml(__('Settings')) ?></h2>
+            <button type="button"
+                    class="pos-modal__close"
+                    @click="$store.posLayout.closeSettings()"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+
+        <div class="pos-modal__body">
+            <!-- ================= Appearance ================= -->
+            <section class="pos-settings__section">
+                <h3 class="pos-settings__heading"><?= $escaper->escapeHtml(__('Appearance')) ?></h3>
+
+                <!-- Theme -->
+                <div class="pos-settings__row">
+                    <span class="pos-settings__label"><?= $escaper->escapeHtml(__('Theme')) ?></span>
+                    <div class="pos-settings__control">
+                        <div class="pos-segment" role="radiogroup" aria-label="<?= $escaper->escapeHtmlAttr(__('Theme')) ?>">
+                            <button type="button"
+                                    class="pos-segment__btn"
+                                    :class="{ 'is-active': $store.posLayout.theme.mode === 'light' }"
+                                    @click="$store.posLayout.setTheme({ mode: 'light' })">
+                                <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-sun"/></svg>
+                                <?= $escaper->escapeHtml(__('Light')) ?>
+                            </button>
+                            <button type="button"
+                                    class="pos-segment__btn"
+                                    :class="{ 'is-active': $store.posLayout.theme.mode === 'dark' }"
+                                    @click="$store.posLayout.setTheme({ mode: 'dark' })">
+                                <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-moon"/></svg>
+                                <?= $escaper->escapeHtml(__('Dark')) ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accent color -->
+                <div class="pos-settings__row">
+                    <span class="pos-settings__label"><?= $escaper->escapeHtml(__('Accent color')) ?></span>
+                    <div class="pos-settings__control">
+                        <div class="pos-swatches">
+                            <template x-for="color in $store.posLayout.accents" :key="color">
+                                <button type="button"
+                                        class="pos-swatch"
+                                        :class="{ 'is-active': $store.posLayout.theme.accent === color }"
+                                        :style="'background:' + color"
+                                        :aria-label="'<?= $escaper->escapeJs(__('Accent')) ?> ' + color"
+                                        @click="$store.posLayout.setTheme({ accent: color })"></button>
+                            </template>
+                            <span class="pos-swatch pos-swatch--custom"
+                                  :class="{ 'is-active': !$store.posLayout.accents.includes($store.posLayout.theme.accent) }"
+                                  title="<?= $escaper->escapeHtmlAttr(__('Custom color')) ?>">
+                                <input type="color"
+                                       :value="$store.posLayout.theme.accent"
+                                       @input="$store.posLayout.setTheme({ accent: $event.target.value })"
+                                       aria-label="<?= $escaper->escapeHtmlAttr(__('Custom accent color')) ?>">
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Density -->
+                <div class="pos-settings__row">
+                    <span class="pos-settings__label"><?= $escaper->escapeHtml(__('Density')) ?></span>
+                    <div class="pos-settings__control">
+                        <div class="pos-segment" role="radiogroup" aria-label="<?= $escaper->escapeHtmlAttr(__('Density')) ?>">
+                            <button type="button"
+                                    class="pos-segment__btn"
+                                    :class="{ 'is-active': $store.posLayout.theme.density === 'comfortable' }"
+                                    @click="$store.posLayout.setTheme({ density: 'comfortable' })">
+                                <?= $escaper->escapeHtml(__('Comfortable')) ?>
+                            </button>
+                            <button type="button"
+                                    class="pos-segment__btn"
+                                    :class="{ 'is-active': $store.posLayout.theme.density === 'compact' }"
+                                    @click="$store.posLayout.setTheme({ density: 'compact' })">
+                                <?= $escaper->escapeHtml(__('Compact')) ?>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Button scale -->
+                <div class="pos-settings__row">
+                    <span class="pos-settings__label"><?= $escaper->escapeHtml(__('Button size')) ?></span>
+                    <div class="pos-settings__control">
+                        <input type="range"
+                               class="pos-slider"
+                               min="0.85" max="1.3" step="0.05"
+                               :value="$store.posLayout.theme.btn_scale"
+                               @input="$store.posLayout.setTheme({ btn_scale: $event.target.value })"
+                               aria-label="<?= $escaper->escapeHtmlAttr(__('Button size')) ?>">
+                        <span class="pos-settings__value"
+                              x-text="Math.round($store.posLayout.theme.btn_scale * 100) + '%'"></span>
+                    </div>
+                </div>
+
+                <!-- Font scale -->
+                <div class="pos-settings__row">
+                    <span class="pos-settings__label"><?= $escaper->escapeHtml(__('Font size')) ?></span>
+                    <div class="pos-settings__control">
+                        <input type="range"
+                               class="pos-slider"
+                               min="0.85" max="1.25" step="0.05"
+                               :value="$store.posLayout.theme.font_scale"
+                               @input="$store.posLayout.setTheme({ font_scale: $event.target.value })"
+                               aria-label="<?= $escaper->escapeHtmlAttr(__('Font size')) ?>">
+                        <span class="pos-settings__value"
+                              x-text="Math.round($store.posLayout.theme.font_scale * 100) + '%'"></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= Behavior ================= -->
+            <section class="pos-settings__section">
+                <h3 class="pos-settings__heading"><?= $escaper->escapeHtml(__('Behavior')) ?></h3>
+
+                <!-- Idle lock -->
+                <div class="pos-settings__row">
+                    <span class="pos-settings__label">
+                        <?= $escaper->escapeHtml(__('Idle auto-lock')) ?>
+                        <span class="pos-settings__hint"
+                              x-show="$store.posLayout.idleLockMinutes() > 0"
+                              x-text="'<?= $escaper->escapeJs(__('Locks after')) ?> '
+                                  + $store.posLayout.idleLockMinutes()
+                                  + ' <?= $escaper->escapeJs(__('minutes of inactivity')) ?>'"></span>
+                        <span class="pos-settings__hint"
+                              x-show="$store.posLayout.idleLockMinutes() === 0"
+                              x-cloak><?= $escaper->escapeHtml(__('Disabled in store configuration')) ?></span>
+                    </span>
+                    <div class="pos-settings__control">
+                        <label class="pos-switch">
+                            <input type="checkbox"
+                                   :checked="$store.posLayout.theme.idle_lock_enabled"
+                                   @change="$store.posLayout.setTheme({ idle_lock_enabled: $event.target.checked })">
+                            <span class="pos-switch__track" aria-hidden="true"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Sound on scan -->
+                <div class="pos-settings__row">
+                    <span class="pos-settings__label">
+                        <?= $escaper->escapeHtml(__('Sound on scan')) ?>
+                        <span class="pos-settings__hint"><?= $escaper->escapeHtml(__('Beep when a barcode is scanned')) ?></span>
+                    </span>
+                    <div class="pos-settings__control">
+                        <label class="pos-switch">
+                            <input type="checkbox"
+                                   :checked="$store.posLayout.theme.sound_on_scan"
+                                   @change="$store.posLayout.setTheme({ sound_on_scan: $event.target.checked }); $store.posLayout.beep()">
+                            <span class="pos-switch__track" aria-hidden="true"></span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="pos-modal__footer">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost"
+                    @click="$store.posLayout.resetTheme()">
+                <?= $escaper->escapeHtml(__('Reset to defaults')) ?>
+            </button>
+            <button type="button"
+                    class="pos-btn pos-btn--primary"
+                    :disabled="$store.posLayout.saving"
+                    @click="$store.posLayout.saveSettings()">
+                <span x-show="!$store.posLayout.saving"><?= $escaper->escapeHtml(__('Save settings')) ?></span>
+                <span x-show="$store.posLayout.saving" x-cloak><?= $escaper->escapeHtml(__('Saving...')) ?></span>
+            </button>
+        </div>
+    </div>
+</div>

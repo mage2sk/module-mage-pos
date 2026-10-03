@@ -1,0 +1,628 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS terminal - cart, decomposed into three independently-placeable grid
+ * blocks (UI-fix contract §18): cart-items (multi-cart tabs + line items),
+ * cart-totals (totals block) and cart-actions (discount / coupon / custom /
+ * customer / note / hold + CHARGE). The cart tabs strip stays with
+ * cart-items. All three blocks share ONE posCart() component instance:
+ * the host wrapper carries x-data="posCart()" and uses display:contents so
+ * its three child <section data-panel="..."> elements become direct grid
+ * items of .pos-grid (layout.js places each by its data-panel id) while the
+ * Alpine scope, event listeners and modal state remain singular.
+ *
+ * Markup uses pos.css classes only (panel chrome, cart lines, totals,
+ * keypad, modal, stepper, badge, chip, empty-state components).
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+declare(strict_types=1);
+
+// Cart-items empty state (UI-fix round 1): the stock .pos-empty is rigid
+// (sp-8 padding + fixed 56px doodle), so at the default layout its text
+// bottom lands 3px (1280x800) / 12px (1366x768) past the panel-body edge
+// and renders clipped on first login. Same cure as panel-customer's inline
+// flex empty-state styles: let the block flex-fill the leftover body
+// height (flex:1 1 auto; min-height:0), trim the padding, and let the
+// doodle shrink (56px -> 24px min, aspect kept) so icon + copy always fit;
+// when the body is genuinely shorter than the minimum the body still
+// scrolls per contract items 21/25. display:none is the pre-Alpine x-show
+// initial state; Alpine clears it and .pos-empty's display:flex takes over.
+$emptyStyle = 'display:none;flex:1 1 auto;min-height:0;padding:8px 16px';
+$emptyIconStyle = 'flex:0 1 auto;min-height:24px;display:flex;'
+    . 'align-items:center;justify-content:center';
+$emptyIconSvgStyle = 'height:100%;min-height:24px;max-height:56px;'
+    . 'width:auto;aspect-ratio:1/1';
+
+// UI-fix round 1 (item 47 verification observation): grand_total can carry
+// components the totals payload does NOT itemize - e.g. a flat shipping/fee
+// rate applied at quote level left CHARGE at $29.00 over Subtotal $24.00 +
+// Tax $0.00 with no visible explanation for the cashier. Derive the residual
+// purely from the payload fields cart.js already exposes:
+//   grand_total − (subtotal − discount − pos_discount + tax)
+// (discount/pos_discount arrive as positive magnitudes, hence "+") and show
+// it as a "Shipping & fees" row so every dollar in CHARGE is accounted for.
+// View-side arithmetic only - no cart.js method, no API/schema change (live
+// sites consume this module; the payload stays as-is). Rounded to cents and
+// hidden below 1¢ so float noise never paints a $0.00 row. Optimistic
+// bumpTotalsLocal() moves subtotal and grand_total in lockstep, so the
+// residual stays stable during optimistic repaints. The Alpine expression is
+// built once here so x-show and x-text can never diverge.
+$cartFeesExpr = '(cart && cart.totals'
+    . ' ? Math.round(((Number(cart.totals.grand_total) || 0)'
+    . ' - (Number(cart.totals.subtotal) || 0)'
+    . ' + (Number(cart.totals.discount) || 0)'
+    . ' + (Number(cart.totals.pos_discount) || 0)'
+    . ' - (Number(cart.totals.tax) || 0)) * 100) / 100'
+    . ' : 0)';
+?>
+<?php /* id="pos-panel-cart" preserved so cart.js's grand-total flash selector
+   (#pos-panel-cart ...) still matches after the cart was split into three grid
+   blocks; the display:contents host is not itself a grid item. */ ?>
+<div class="pos-cart-host" id="pos-panel-cart" style="display: contents;" x-data="posCart()" x-cloak>
+    <style>
+        /* Cart-block-scoped refinements. pos.css is owned by the design-system
+           lead - these rules only re-tune existing canon classes inside the
+           cart blocks and add no new class names.
+           1) Touch targets: cart tabs, the tab close x and the qty stepper
+              buttons are the highest-frequency POS controls - enforce >= 44px
+              in both dimensions (pos.css ships them at 38px tall).
+           2) Tablet (<= 1024px): labels are hidden so the six quick actions
+              become icon-only; use a balanced 3-column grid at that
+              breakpoint so the row never leaves an orphaned full-width button. */
+        .pos-panel--cart-items .pos-cart-tab,
+        .pos-panel--cart-actions .pos-cart-tab {
+            min-height: max(44px, calc(var(--pos-control-h) - 4px));
+        }
+        .pos-panel--cart-items .pos-cart-tab--new {
+            min-width: max(44px, calc(var(--pos-control-h) - 4px));
+        }
+        .pos-panel--cart-items .pos-cart-tab__close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            align-self: stretch;
+            min-width: 40px;
+            padding: 0;
+            margin: -4px -14px -4px -2px;
+            border-radius: 0 99px 99px 0;
+        }
+        .pos-panel--cart-items .pos-stepper__btn,
+        .pos-cart-host .pos-modal .pos-stepper__btn {
+            width: max(44px, calc(var(--pos-control-h) - 10px));
+            height: max(44px, calc(var(--pos-control-h) - 10px));
+        }
+        @media (max-width: 1023.98px) {
+            .pos-panel--cart-actions .pos-denominations {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+    </style>
+
+    <!-- ===================== Cart items (tabs + lines) ===================== -->
+    <section class="pos-panel pos-panel--cart pos-panel--cart-items"
+             id="pos-panel-cart-items"
+             data-panel="cart-items">
+        <header class="pos-panel__header" data-drag-handle>
+            <span class="pos-panel__drag" aria-hidden="true"></span>
+            <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Sale')) ?></span>
+            <?php /* UI-fix item 52: the ONE and ONLY multi-cart tab strip.
+               Driven entirely by the posCart() store (tabs/activeId,
+               persisted as panth_pos_cart_tabs / panth_pos_cart_active in
+               cart.js): every open cart renders a "#N" pill, the active one
+               is highlighted, "+" adds, the inline x closes, click switches.
+               The former duplicate header strip (app.js's own list) was
+               removed - never add a second independent tab list. */ ?>
+            <nav class="pos-cart-tabs" aria-label="<?= $escaper->escapeHtmlAttr(__('Carts')) ?>">
+                <template x-for="(tab, i) in tabs" :key="tab.quote_id">
+                    <button type="button"
+                            class="pos-cart-tab"
+                            :class="{ 'pos-cart-tab--active': tab.quote_id === activeId }"
+                            :aria-label="'<?= $escaper->escapeJs(__('Cart')) ?> ' + (i + 1)"
+                            :aria-pressed="tab.quote_id === activeId ? 'true' : 'false'"
+                            @click="switchTab(tab.quote_id)">
+                        <span x-text="'#' + (i + 1)"></span>
+                        <span class="pos-cart-tab__close"
+                              x-show="tabs.length > 1 && tab.quote_id === activeId"
+                              @click.stop="closeTab(tab.quote_id)"
+                              role="button"
+                              aria-label="<?= $escaper->escapeHtmlAttr(__('Close cart')) ?>">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg>
+                        </span>
+                    </button>
+                </template>
+                <button type="button"
+                        class="pos-cart-tab pos-cart-tab--new"
+                        @click="addTab()"
+                        title="<?= $escaper->escapeHtmlAttr(__('New cart')) ?>"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('New cart')) ?>">+</button>
+            </nav>
+        </header>
+
+        <div class="pos-panel__body">
+            <!-- Customer / note chips -->
+            <div class="pos-denominations" x-show="cart && (cart.customer || cart.note)">
+                <template x-if="cart && cart.customer">
+                    <button type="button" class="pos-chip pos-chip--open" @click="openCustomer()">
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-user"/></svg>
+                        <span x-text="cart.customer.name || cart.customer.email"></span>
+                        <span role="button"
+                              @click.stop="detachCustomer()"
+                              aria-label="<?= $escaper->escapeHtmlAttr(__('Detach customer')) ?>">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg>
+                        </span>
+                    </button>
+                </template>
+                <template x-if="cart && cart.note">
+                    <button type="button" class="pos-chip" @click="openNote()">
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-note"/></svg>
+                        <span x-text="cart.note"></span>
+                    </button>
+                </template>
+            </div>
+
+            <!-- Line items -->
+            <div class="pos-cart-lines" x-show="cart && cart.items.length">
+                <template x-for="item in (cart ? cart.items : [])" :key="item.item_id + '-' + item.sku">
+                    <div class="pos-cart-line"
+                         @click="openItem(item)"
+                         role="button"
+                         tabindex="0"
+                         @keydown.enter.prevent="openItem(item)">
+                        <template x-if="item.image">
+                            <img class="pos-cart-line__image" :src="item.image" :alt="item.name" loading="lazy">
+                        </template>
+                        <template x-if="!item.image">
+                            <span class="pos-cart-line__image" aria-hidden="true">
+                                <svg class="pos-icon" x-show="item.is_custom"><use href="#pi-sparkle"/></svg>
+                                <svg class="pos-icon" x-show="!item.is_custom"><use href="#pi-cart"/></svg>
+                            </span>
+                        </template>
+                        <span class="pos-cart-line__info">
+                            <span class="pos-cart-line__name">
+                                <span x-text="item.name"></span>
+                                <span class="pos-badge" x-show="item.is_custom"><?= $escaper->escapeHtml(__('Custom')) ?></span>
+                            </span>
+                            <?php /* Item 39: chosen options (configurable Size/Color,
+                               bundle selections, custom option values incl. price
+                               deltas) as small muted lines under the name. */ ?>
+                            <span class="pos-cart-line__options" x-show="(item.options || []).length">
+                                <template x-for="(opt, oi) in (item.options || [])" :key="oi">
+                                    <span class="pos-cart-line__option"
+                                          x-text="(opt.label ? opt.label + ': ' : '') + opt.value
+                                              + (Number(opt.price) > 0 ? ' (+' + money(opt.price) + ')' : '')"></span>
+                                </template>
+                            </span>
+                            <span class="pos-cart-line__meta" x-text="lineMeta(item)"></span>
+                            <span class="pos-cart-line__note" x-show="item.note" x-text="item.note"></span>
+                        </span>
+                        <span class="pos-cart-line__qty" @click.stop>
+                            <span class="pos-stepper">
+                                <button type="button"
+                                        class="pos-stepper__btn"
+                                        @click="stepQty(item, -1)"
+                                        aria-label="<?= $escaper->escapeHtmlAttr(__('Decrease quantity')) ?>">
+                                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-minus"/></svg>
+                                </button>
+                                <span class="pos-stepper__value" x-text="item.qty"></span>
+                                <button type="button"
+                                        class="pos-stepper__btn"
+                                        @click="stepQty(item, 1)"
+                                        aria-label="<?= $escaper->escapeHtmlAttr(__('Increase quantity')) ?>">
+                                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                                </button>
+                            </span>
+                        </span>
+                        <span class="pos-cart-line__total">
+                            <span class="pos-amount" x-text="money(item.row_total)"></span>
+                            <span class="pos-cart-line__discount pos-amount"
+                                  x-show="lineSaving(item) > 0"
+                                  x-text="'−' + money(lineSaving(item))"></span>
+                        </span>
+                    </div>
+                </template>
+            </div>
+
+            <div class="pos-empty" x-show="!loading && (!cart || cart.items.length === 0)"
+                 style="<?= $escaper->escapeHtmlAttr($emptyStyle) ?>">
+                <span class="pos-empty__icon" aria-hidden="true"
+                      style="<?= $escaper->escapeHtmlAttr($emptyIconStyle) ?>">
+                    <svg class="pos-icon"
+                         style="<?= $escaper->escapeHtmlAttr($emptyIconSvgStyle) ?>"><use href="#pi-empty-cart"/></svg>
+                </span>
+                <span class="pos-empty__text"><?= $escaper->escapeHtml(__('Cart is empty - scan or tap a product.')) ?></span>
+            </div>
+            <?php /* The ONLY loader of the cart blocks lives here in cart-items
+               (UI-fix contract §21): shown solely during an actual cart fetch
+               (boot / tab switch) while there are no lines to render, so it
+               never stacks under existing line items and never appears in
+               cart-totals or cart-actions. */ ?>
+            <div class="pos-empty" x-show="loading && (!cart || cart.items.length === 0)"
+                 style="<?= $escaper->escapeHtmlAttr($emptyStyle) ?>">
+                <span class="pos-spinner" aria-hidden="true"></span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========================== Cart totals ============================== -->
+    <section class="pos-panel pos-panel--cart pos-panel--cart-totals"
+             id="pos-panel-cart-totals"
+             data-panel="cart-totals">
+        <header class="pos-panel__header" data-drag-handle>
+            <span class="pos-panel__drag" aria-hidden="true"></span>
+            <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Totals')) ?></span>
+        </header>
+        <div class="pos-panel__body">
+            <div class="pos-totals" x-show="cart">
+                <div class="pos-totals__row">
+                    <span><?= $escaper->escapeHtml(__('Subtotal')) ?></span>
+                    <span class="pos-amount" x-text="cart ? money(cart.totals.subtotal) : ''"></span>
+                </div>
+                <div class="pos-totals__row pos-totals__row--discount" x-show="discountTotal() > 0">
+                    <span><?= $escaper->escapeHtml(__('Discounts')) ?></span>
+                    <span class="pos-amount" x-text="'−' + money(discountTotal())"></span>
+                </div>
+                <div class="pos-totals__row pos-totals__row--discount"
+                     x-show="posDiscountTotal() > 0 || (cart && cart.pos_discount)">
+                    <span>
+                        <?= $escaper->escapeHtml(__('POS discount')) ?>
+                        <button type="button"
+                                class="pos-chip"
+                                @click="removeCartDiscount()"
+                                aria-label="<?= $escaper->escapeHtmlAttr(__('Remove cart discount')) ?>">
+                            <span x-text="posDiscountLabel()"></span>
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg>
+                        </button>
+                    </span>
+                    <span class="pos-amount" x-text="'−' + money(posDiscountTotal())"></span>
+                </div>
+                <div class="pos-totals__row" x-show="cart && cart.coupon_code">
+                    <span><?= $escaper->escapeHtml(__('Coupon')) ?></span>
+                    <button type="button"
+                            class="pos-chip"
+                            @click="removeCoupon()"
+                            aria-label="<?= $escaper->escapeHtmlAttr(__('Remove coupon')) ?>">
+                        <span x-text="cart ? cart.coupon_code : ''"></span>
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg>
+                    </button>
+                </div>
+                <div class="pos-totals__row">
+                    <span><?= $escaper->escapeHtml(__('Tax')) ?></span>
+                    <span class="pos-amount" x-text="cart ? money(cart.totals.tax) : ''"></span>
+                </div>
+                <?php /* Unitemized grand-total components (shipping/fees) -
+                   see $cartFeesExpr above. Sits between Tax and Total so the
+                   column still sums visually top-to-bottom. */ ?>
+                <div class="pos-totals__row"
+                     x-show="<?= $escaper->escapeHtmlAttr($cartFeesExpr) ?> >= 0.01">
+                    <span><?= $escaper->escapeHtml(__('Shipping & fees')) ?></span>
+                    <span class="pos-amount"
+                          x-text="money(<?= $escaper->escapeHtmlAttr($cartFeesExpr) ?>)"></span>
+                </div>
+                <div class="pos-totals__row pos-totals__row--grand">
+                    <span><?= $escaper->escapeHtml(__('Total')) ?></span>
+                    <span class="pos-amount" x-text="cart ? money(cart.totals.grand_total) : ''"></span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ======================= Cart actions + CHARGE ======================= -->
+    <section class="pos-panel pos-panel--cart pos-panel--cart-actions"
+             id="pos-panel-cart-actions"
+             data-panel="cart-actions">
+        <header class="pos-panel__header" data-drag-handle>
+            <span class="pos-panel__drag" aria-hidden="true"></span>
+            <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Actions')) ?></span>
+        </header>
+        <div class="pos-panel__body">
+            <!-- Action buttons -->
+            <div class="pos-denominations">
+                <button type="button" class="pos-btn pos-btn--icon" @click="openDiscount()">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-tag"/></svg>
+                    <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Discount')) ?></span>
+                </button>
+                <button type="button" class="pos-btn pos-btn--icon" @click="openCoupon()">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-ticket"/></svg>
+                    <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Coupon')) ?></span>
+                </button>
+                <button type="button" class="pos-btn pos-btn--icon" @click="openCustom()">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-sparkle"/></svg>
+                    <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Custom')) ?></span>
+                </button>
+                <button type="button" class="pos-btn pos-btn--icon" @click="openCustomer()">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-user"/></svg>
+                    <span class="pos-btn__label"
+                          x-text="cart && cart.customer && cart.customer.name ? cart.customer.name : '<?= $escaper->escapeJs(__('Customer')) ?>'"></span>
+                </button>
+                <button type="button" class="pos-btn pos-btn--icon" @click="openNote()">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-note"/></svg>
+                    <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Note')) ?></span>
+                </button>
+                <button type="button" class="pos-btn pos-btn--icon" @click="openHold()">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-hold"/></svg>
+                    <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Hold')) ?></span>
+                </button>
+            </div>
+        </div>
+
+        <footer class="pos-panel__footer">
+            <!-- CHARGE -->
+            <button type="button"
+                    class="pos-btn pos-btn--primary pos-btn--lg pos-btn--block"
+                    :disabled="!cart || cart.items.length === 0 || saving"
+                    @click="charge()">
+                <span><?= $escaper->escapeHtml(__('CHARGE')) ?></span>
+                <span class="pos-amount" x-text="money(grandTotal())"></span>
+            </button>
+        </footer>
+    </section>
+
+    <!-- ============================= Item modal ============================= -->
+    <div class="pos-modal-backdrop" x-show="modal === 'item'" @click.self="closeModal()" x-cloak>
+        <div class="pos-modal pos-modal--sm" role="dialog" aria-modal="true">
+            <header class="pos-modal__header">
+                <div class="pos-modal__title" x-text="mItem ? mItem.name : ''"></div>
+                <span class="pos-badge" x-show="mItem && mItem.sku" x-text="mItem ? mItem.sku : ''"></span>
+                <button type="button" class="pos-modal__close" @click="closeModal()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"><svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg></button>
+            </header>
+            <div class="pos-modal__body">
+                <?php /* Item 39: the line's chosen options echoed in the item
+                   modal (read-only - option changes happen by re-adding). */ ?>
+                <div class="pos-cart-line__options pos-cart-line__options--modal"
+                     x-show="mItem && (mItem.options || []).length">
+                    <template x-for="(opt, oi) in (mItem ? (mItem.options || []) : [])" :key="oi">
+                        <span class="pos-cart-line__option"
+                              x-text="(opt.label ? opt.label + ': ' : '') + opt.value
+                                  + (Number(opt.price) > 0 ? ' (+' + money(opt.price) + ')' : '')"></span>
+                    </template>
+                </div>
+                <div class="pos-denominations">
+                    <button type="button"
+                            class="pos-btn pos-btn--icon"
+                            :class="{ 'pos-btn--active': keypadTarget === 'qty' }"
+                            @click="keypadTarget = 'qty'">
+                        <span class="pos-amount" x-text="mQty || '0'"></span>
+                        <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Qty')) ?></span>
+                    </button>
+                    <button type="button"
+                            class="pos-btn pos-btn--icon"
+                            x-show="can('can_price_override')"
+                            :class="{ 'pos-btn--active': keypadTarget === 'price' }"
+                            @click="keypadTarget = 'price'">
+                        <span class="pos-amount" x-text="mPrice || '0'"></span>
+                        <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Price')) ?></span>
+                    </button>
+                    <button type="button"
+                            class="pos-btn pos-btn--icon"
+                            :class="{ 'pos-btn--active': keypadTarget === 'discount' }"
+                            @click="keypadTarget = 'discount'">
+                        <span class="pos-amount" x-text="(mDiscValue || '0') + (mDiscType === 'percent' ? '%' : '')"></span>
+                        <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Discount')) ?></span>
+                    </button>
+                </div>
+
+                <?php /* Qty stepper in the item modal (UI-fix contract §22) -
+                   same .pos-stepper component as the cart lines. Pure view-state
+                   nudge on the string draft mQty (cart.js saveItem() casts via
+                   Number()); keypad input on the 'qty' target keeps working. */ ?>
+                <span class="pos-stepper" x-show="keypadTarget === 'qty'">
+                    <button type="button"
+                            class="pos-stepper__btn"
+                            @click="mQty = String(Math.max(1, (Number(mQty) || 1) - 1))"
+                            aria-label="<?= $escaper->escapeHtmlAttr(__('Decrease quantity')) ?>">
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-minus"/></svg>
+                    </button>
+                    <span class="pos-stepper__value" x-text="mQty || '1'"></span>
+                    <button type="button"
+                            class="pos-stepper__btn"
+                            @click="mQty = String((Number(mQty) || 0) + 1)"
+                            aria-label="<?= $escaper->escapeHtmlAttr(__('Increase quantity')) ?>">
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-plus"/></svg>
+                    </button>
+                </span>
+
+                <div class="pos-segment" x-show="keypadTarget === 'discount'">
+                    <button type="button"
+                            class="pos-segment__btn"
+                            :class="{ 'is-active': mDiscType === 'percent' }"
+                            @click="mDiscType = 'percent'"><?= $escaper->escapeHtml(__('Percent %')) ?></button>
+                    <button type="button"
+                            class="pos-segment__btn"
+                            :class="{ 'is-active': mDiscType === 'fixed' }"
+                            @click="mDiscType = 'fixed'"><?= $escaper->escapeHtml(__('Fixed')) ?></button>
+                </div>
+
+                <?php /* UIFIX item 32: spacing wrapper only - groups the value
+                   display + keypad as one rhythm unit so pos.css can keep an
+                   even --pos-sp-4 beat between segmented tabs / display+keypad
+                   / the Line note field. No behaviour change. */ ?>
+                <div class="pos-keypad-block">
+                    <div class="pos-keypad__display" x-text="activeKeypadValue()"></div>
+                    <div class="pos-keypad">
+                        <template x-for="k in ['1','2','3','4','5','6','7','8','9','C','0','.']" :key="k">
+                            <button type="button"
+                                    class="pos-keypad__key"
+                                    :class="{ 'pos-keypad__key--action': k === 'C' }"
+                                    @click="keyTap(k)"
+                                    x-text="k"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <label class="pos-field">
+                    <span class="pos-field__label"><?= $escaper->escapeHtml(__('Line note')) ?></span>
+                    <input type="text" class="pos-input" x-model="mNote"
+                           placeholder="<?= $escaper->escapeHtmlAttr(__('e.g. gift wrap')) ?>">
+                </label>
+            </div>
+            <footer class="pos-modal__footer">
+                <button type="button" class="pos-btn pos-btn--danger" @click="removeItemFromModal()"><?= $escaper->escapeHtml(__('Remove')) ?></button>
+                <button type="button" class="pos-btn pos-btn--ghost" @click="closeModal()"><?= $escaper->escapeHtml(__('Cancel')) ?></button>
+                <button type="button" class="pos-btn pos-btn--primary" @click="saveItem()"><?= $escaper->escapeHtml(__('Save')) ?></button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ========================= Cart discount modal ======================== -->
+    <div class="pos-modal-backdrop" x-show="modal === 'discount'" @click.self="closeModal()" x-cloak>
+        <div class="pos-modal pos-modal--sm" role="dialog" aria-modal="true">
+            <header class="pos-modal__header">
+                <div class="pos-modal__title"><?= $escaper->escapeHtml(__('Cart Discount')) ?></div>
+                <button type="button" class="pos-modal__close" @click="closeModal()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"><svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg></button>
+            </header>
+            <div class="pos-modal__body">
+                <div class="pos-segment">
+                    <button type="button"
+                            class="pos-segment__btn"
+                            :class="{ 'is-active': dType === 'percent' }"
+                            @click="dType = 'percent'"><?= $escaper->escapeHtml(__('Percent %')) ?></button>
+                    <button type="button"
+                            class="pos-segment__btn"
+                            :class="{ 'is-active': dType === 'fixed' }"
+                            @click="dType = 'fixed'"><?= $escaper->escapeHtml(__('Fixed amount')) ?></button>
+                </div>
+                <div>
+                    <div class="pos-keypad__display"
+                         x-text="(dValue || '0') + (dType === 'percent' ? '%' : '')"></div>
+                    <div class="pos-keypad">
+                        <template x-for="k in ['1','2','3','4','5','6','7','8','9','C','0','.']" :key="k">
+                            <button type="button"
+                                    class="pos-keypad__key"
+                                    :class="{ 'pos-keypad__key--action': k === 'C' }"
+                                    @click="keyTapDiscount(k)"
+                                    x-text="k"></button>
+                        </template>
+                    </div>
+                </div>
+                <div class="pos-field__label"
+                     x-text="'<?= $escaper->escapeJs(__('Your maximum discount:')) ?> ' + maxDiscountPercent() + '%'"></div>
+            </div>
+            <footer class="pos-modal__footer">
+                <button type="button" class="pos-btn pos-btn--danger" x-show="cart && cart.pos_discount" @click="removeCartDiscount()"><?= $escaper->escapeHtml(__('Remove')) ?></button>
+                <button type="button" class="pos-btn pos-btn--ghost" @click="closeModal()"><?= $escaper->escapeHtml(__('Cancel')) ?></button>
+                <button type="button" class="pos-btn pos-btn--primary" @click="applyCartDiscount()"><?= $escaper->escapeHtml(__('Apply')) ?></button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ============================ Coupon modal ============================ -->
+    <div class="pos-modal-backdrop" x-show="modal === 'coupon'" @click.self="closeModal()" x-cloak>
+        <div class="pos-modal pos-modal--sm" role="dialog" aria-modal="true">
+            <header class="pos-modal__header">
+                <div class="pos-modal__title"><?= $escaper->escapeHtml(__('Coupon Code')) ?></div>
+                <button type="button" class="pos-modal__close" @click="closeModal()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"><svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg></button>
+            </header>
+            <div class="pos-modal__body">
+                <input type="text" class="pos-input" x-model="couponCode"
+                       @keydown.enter.prevent="applyCoupon()"
+                       placeholder="<?= $escaper->escapeHtmlAttr(__('Enter coupon code')) ?>"
+                       autocomplete="off" autocapitalize="characters">
+            </div>
+            <footer class="pos-modal__footer">
+                <button type="button" class="pos-btn pos-btn--danger" x-show="cart && cart.coupon_code" @click="removeCoupon()"><?= $escaper->escapeHtml(__('Remove')) ?></button>
+                <button type="button" class="pos-btn pos-btn--ghost" @click="closeModal()"><?= $escaper->escapeHtml(__('Cancel')) ?></button>
+                <button type="button" class="pos-btn pos-btn--primary" @click="applyCoupon()"><?= $escaper->escapeHtml(__('Apply')) ?></button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ========================== Custom item modal ========================= -->
+    <div class="pos-modal-backdrop" x-show="modal === 'custom'" @click.self="closeModal()" x-cloak>
+        <div class="pos-modal pos-modal--sm" role="dialog" aria-modal="true">
+            <header class="pos-modal__header">
+                <div class="pos-modal__title"><?= $escaper->escapeHtml(__('Custom Item')) ?></div>
+                <button type="button" class="pos-modal__close" @click="closeModal()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"><svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg></button>
+            </header>
+            <div class="pos-modal__body">
+                <label class="pos-field">
+                    <span class="pos-field__label"><?= $escaper->escapeHtml(__('Name')) ?></span>
+                    <input type="text" class="pos-input" x-model="cName"
+                           placeholder="<?= $escaper->escapeHtmlAttr(__('e.g. Gift wrapping')) ?>">
+                </label>
+                <div class="pos-denominations">
+                    <button type="button"
+                            class="pos-btn pos-btn--icon"
+                            :class="{ 'pos-btn--active': keypadTarget === 'customPrice' }"
+                            @click="keypadTarget = 'customPrice'">
+                        <span class="pos-amount" x-text="cPrice || '0'"></span>
+                        <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Price')) ?></span>
+                    </button>
+                    <button type="button"
+                            class="pos-btn pos-btn--icon"
+                            :class="{ 'pos-btn--active': keypadTarget === 'customQty' }"
+                            @click="keypadTarget = 'customQty'">
+                        <span class="pos-amount" x-text="cQty || '1'"></span>
+                        <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Qty')) ?></span>
+                    </button>
+                </div>
+                <?php /* UIFIX item 32: spacing wrapper only (see item modal). */ ?>
+                <div class="pos-keypad-block">
+                    <div class="pos-keypad__display" x-text="customKeypadValue()"></div>
+                    <div class="pos-keypad">
+                        <template x-for="k in ['1','2','3','4','5','6','7','8','9','C','0','.']" :key="k">
+                            <button type="button"
+                                    class="pos-keypad__key"
+                                    :class="{ 'pos-keypad__key--action': k === 'C' }"
+                                    @click="keyTapCustom(k)"
+                                    x-text="k"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <footer class="pos-modal__footer">
+                <button type="button" class="pos-btn pos-btn--ghost" @click="closeModal()"><?= $escaper->escapeHtml(__('Cancel')) ?></button>
+                <button type="button" class="pos-btn pos-btn--primary" @click="addCustomItem()"><?= $escaper->escapeHtml(__('Add to cart')) ?></button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ============================= Note modal ============================= -->
+    <div class="pos-modal-backdrop" x-show="modal === 'note'" @click.self="closeModal()" x-cloak>
+        <div class="pos-modal pos-modal--sm" role="dialog" aria-modal="true">
+            <header class="pos-modal__header">
+                <div class="pos-modal__title"><?= $escaper->escapeHtml(__('Order Note')) ?></div>
+                <button type="button" class="pos-modal__close" @click="closeModal()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"><svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg></button>
+            </header>
+            <div class="pos-modal__body">
+                <textarea class="pos-textarea" rows="4" x-model="noteDraft"
+                          placeholder="<?= $escaper->escapeHtmlAttr(__('Note printed on the order...')) ?>"></textarea>
+            </div>
+            <footer class="pos-modal__footer">
+                <button type="button" class="pos-btn pos-btn--ghost" @click="closeModal()"><?= $escaper->escapeHtml(__('Cancel')) ?></button>
+                <button type="button" class="pos-btn pos-btn--primary" @click="saveNote()"><?= $escaper->escapeHtml(__('Save note')) ?></button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ============================= Hold modal ============================= -->
+    <div class="pos-modal-backdrop" x-show="modal === 'hold'" @click.self="closeModal()" x-cloak>
+        <div class="pos-modal pos-modal--sm" role="dialog" aria-modal="true">
+            <header class="pos-modal__header">
+                <div class="pos-modal__title"><?= $escaper->escapeHtml(__('Hold Cart')) ?></div>
+                <button type="button" class="pos-modal__close" @click="closeModal()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"><svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg></button>
+            </header>
+            <div class="pos-modal__body">
+                <label class="pos-field">
+                    <span class="pos-field__label"><?= $escaper->escapeHtml(__('Label')) ?></span>
+                    <input type="text" class="pos-input" x-model="holdLabel"
+                           @keydown.enter.prevent="confirmHold()"
+                           placeholder="<?= $escaper->escapeHtmlAttr(__('e.g. customer name')) ?>">
+                </label>
+            </div>
+            <footer class="pos-modal__footer">
+                <button type="button" class="pos-btn pos-btn--ghost" @click="closeModal()"><?= $escaper->escapeHtml(__('Cancel')) ?></button>
+                <button type="button" class="pos-btn pos-btn--primary" @click="confirmHold()"><?= $escaper->escapeHtml(__('Hold')) ?></button>
+            </footer>
+        </div>
+    </div>
+</div>

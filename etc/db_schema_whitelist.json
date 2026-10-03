@@ -1,0 +1,215 @@
+{
+    "panth_pos_register": {
+        "column": {
+            "register_id": true,
+            "name": true,
+            "code": true,
+            "store_id": true,
+            "status": true,
+            "receipt_header": true,
+            "receipt_footer": true,
+            "source_code": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_REGISTER_CODE": true,
+            "PANTH_POS_REGISTER_STORE_ID_STORE_STORE_ID": true
+        }
+    },
+    "panth_pos_role": {
+        "column": {
+            "role_id": true,
+            "name": true,
+            "permissions": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "PRIMARY": true
+        }
+    },
+    "panth_pos_user": {
+        "column": {
+            "user_id": true,
+            "username": true,
+            "name": true,
+            "email": true,
+            "password_hash": true,
+            "pin_hash": true,
+            "role_id": true,
+            "status": true,
+            "last_login_at": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_USER_USERNAME": true,
+            "PANTH_POS_USER_ROLE_ID_PANTH_POS_ROLE_ROLE_ID": true
+        }
+    },
+    "panth_pos_session": {
+        "column": {
+            "session_id": true,
+            "register_id": true,
+            "user_id": true,
+            "status": true,
+            "opening_float": true,
+            "expected_cash": true,
+            "counted_cash": true,
+            "over_short": true,
+            "totals_json": true,
+            "opened_at": true,
+            "closed_at": true,
+            "note": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "index": {
+            "PANTH_POS_SESSION_REGISTER_ID_STATUS": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_SESSION_REGISTER_ID_PANTH_POS_REGISTER_REGISTER_ID": true,
+            "PANTH_POS_SESSION_USER_ID_PANTH_POS_USER_USER_ID": true
+        }
+    },
+    "panth_pos_cash_movement": {
+        "column": {
+            "movement_id": true,
+            "session_id": true,
+            "user_id": true,
+            "type": true,
+            "amount": true,
+            "reason": true,
+            "order_id": true,
+            "created_at": true
+        },
+        "index": {
+            "PANTH_POS_CASH_MOVEMENT_SESSION_ID": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_CASH_MOVEMENT_SESSION_ID_PANTH_POS_SESSION_SESSION_ID": true
+        }
+    },
+    "panth_pos_payment_method": {
+        "column": {
+            "method_id": true,
+            "code": true,
+            "title": true,
+            "type": true,
+            "is_active": true,
+            "sort_order": true,
+            "icon": true,
+            "requires_reference": true,
+            "instructions": true,
+            "open_drawer": true,
+            "payment_url_template": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_PAYMENT_METHOD_CODE": true
+        }
+    },
+    "panth_pos_order": {
+        "column": {
+            "pos_order_id": true,
+            "order_id": true,
+            "session_id": true,
+            "register_id": true,
+            "pos_user_id": true,
+            "receipt_number": true,
+            "receipt_token": true,
+            "client_uuid": true,
+            "is_offline_sync": true,
+            "created_at": true
+        },
+        "index": {
+            "PANTH_POS_ORDER_SESSION_ID": true,
+            "PANTH_POS_ORDER_POS_USER_ID": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_ORDER_ORDER_ID": true,
+            "PANTH_POS_ORDER_CLIENT_UUID": true,
+            "PANTH_POS_ORDER_ORDER_ID_SALES_ORDER_ENTITY_ID": true,
+            "PANTH_POS_ORDER_SESSION_ID_PANTH_POS_SESSION_SESSION_ID": true
+        }
+    },
+    "panth_pos_order_payment": {
+        "column": {
+            "payment_id": true,
+            "pos_order_id": true,
+            "method_code": true,
+            "method_title": true,
+            "amount": true,
+            "reference": true,
+            "is_change": true,
+            "created_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_ORDER_PAYMENT_POS_ORDER_ID": true
+        }
+    },
+    "panth_pos_hold": {
+        "column": {
+            "hold_id": true,
+            "register_id": true,
+            "user_id": true,
+            "label": true,
+            "customer_id": true,
+            "cart_json": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "index": {
+            "PANTH_POS_HOLD_REGISTER_ID": true
+        },
+        "constraint": {
+            "PRIMARY": true
+        }
+    },
+    "panth_pos_quick_key": {
+        "column": {
+            "quick_key_id": true,
+            "register_id": true,
+            "product_id": true,
+            "label": true,
+            "color": true,
+            "position": true,
+            "page": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "PRIMARY": true
+        }
+    },
+    "panth_pos_user_preference": {
+        "column": {
+            "preference_id": true,
+            "user_id": true,
+            "layout_json": true,
+            "theme_json": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PANTH_POS_USER_PREFERENCE_USER_ID": true
+        }
+    },
+    "quote": {
+        "column": {
+            "panth_pos_discount_type": true,
+            "panth_pos_discount_value": true,
+            "panth_pos_register_id": true
+        }
+    }
+}
