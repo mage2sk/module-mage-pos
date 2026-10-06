@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Panth_MagePos
+ *
+ * @category  Panth
+ * @package   Panth_MagePos
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Sales:etc/sales.xsd">
+    <section name="quote">
+        <group name="totals">
+            <!--
+                POS cart discount total collector.
+                Core sort orders: subtotal=100, discount=300, shipping=350,
+                shipping_discount=400, tax=450, grand_total=550.
+                420 = after subtotal/discount, before tax/grand_total.
+            -->
+            <item name="pos_discount" instance="Panth\MagePos\Model\Quote\Total\PosDiscount" sort_order="420"/>
+        </group>
+    </section>
+    <!--
+        Credit-memo total collector for the POS manual cart discount.
+
+        The manual cart discount (DiscountService::applyCartDiscount) is collected
+        only on the quote (pos_discount above) and baked into grand_total, but is
+        never written to order/item discount_amount nor refunded by any credit-memo
+        collector - so CreditmemoFactory::createByOrder over-refunds POS-discounted
+        orders (subtotal − coupon + tax, ignoring the manual discount). This
+        collector subtracts the order's proportional manual-discount share from the
+        credit-memo grand total. Core creditmemo sort orders: subtotal=50,
+        discount=150, shipping=200, tax=250, grand_total=400. 350 = after the gross
+        total is accumulated, before grand_total layers adjustments.
+    -->
+    <section name="order_creditmemo">
+        <group name="totals">
+            <item name="pos_discount" instance="Panth\MagePos\Model\Order\Creditmemo\Total\PosDiscount" sort_order="350"/>
+        </group>
+    </section>
+</config>

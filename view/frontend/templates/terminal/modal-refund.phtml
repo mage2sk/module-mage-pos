@@ -1,0 +1,307 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal modal: refunds / returns (spec §9) - order search by increment
+ * id / email / receipt number, order lines with refundable-qty steppers,
+ * refund payment split, restock toggle, reason and confirm. State lives in
+ * Alpine.store('posOrders') (web/js/pos/orders.js). Opened via
+ * $store.posOrders.openModal() or the `pos:open-refund` window CustomEvent.
+ */
+declare(strict_types=1);
+
+/** @var \Panth\MagePos\Block\Terminal $block */
+/** @var \Magento\Framework\Escaper $escaper */
+?>
+<div class="pos-modal-backdrop"
+     data-modal="refund"
+     x-data
+     x-show="$store.posOrders.open"
+     style="display:none"
+     @click.self="$store.posOrders.close()"
+     @keydown.escape.window="$store.posOrders.close()">
+    <div class="pos-modal pos-modal--lg" role="dialog" aria-modal="true"
+         aria-label="<?= $escaper->escapeHtmlAttr(__('Refund / Return')) ?>">
+        <div class="pos-modal__header">
+            <h2 class="pos-modal__title"><?= $escaper->escapeHtml(__('Refund / Return')) ?></h2>
+            <button type="button"
+                    class="pos-modal__close"
+                    @click="$store.posOrders.close()"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+        <div class="pos-modal__body">
+
+            <!-- Search -->
+            <div class="pos-search" x-show="!$store.posOrders.selected">
+                <svg class="pos-icon pos-search__icon" aria-hidden="true"><use href="#pi-search"/></svg>
+                <input type="search"
+                       class="pos-input"
+                       placeholder="<?= $escaper->escapeHtmlAttr(__('Order #, email or receipt number - empty for recent POS orders')) ?>"
+                       x-model="$store.posOrders.query"
+                       @keydown.enter.prevent="$store.posOrders.search()">
+                <button type="button"
+                        class="pos-btn pos-btn--primary"
+                        :disabled="$store.posOrders.searching"
+                        @click="$store.posOrders.search()">
+                    <?= $escaper->escapeHtml(__('Search')) ?>
+                </button>
+            </div>
+
+            <!-- Results -->
+            <template x-if="!$store.posOrders.selected">
+                <div>
+                    <div class="pos-empty"
+                         x-show="$store.posOrders.searched && !$store.posOrders.searching && !$store.posOrders.results.length">
+                        <span class="pos-empty__icon" aria-hidden="true">
+                            <svg class="pos-icon" aria-hidden="true"><use href="#pi-empty-search"/></svg>
+                        </span>
+                        <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No orders found.')) ?></span>
+                    </div>
+                    <ul class="pos-list">
+                        <template x-for="order in $store.posOrders.results" :key="order.order_id">
+                            <li class="pos-list__item"
+                                :class="{'pos-list__item--disabled': !order.can_refund}"
+                                @click="$store.posOrders.select(order)">
+                                <span class="pos-list__item-info">
+                                    <strong x-text="'#' + order.increment_id"></strong>
+                                    <span class="pos-muted" x-show="order.receipt_number" x-text="order.receipt_number"></span>
+                                    <span x-text="order.customer_name"></span>
+                                    <span class="pos-muted" x-text="$store.posOrders.formatDate(order.created_at)"></span>
+                                </span>
+                                <span class="pos-list__item-meta">
+                                    <strong class="pos-amount" x-text="$store.posOrders.money(order.grand_total)"></strong>
+                                    <span class="pos-badge" x-text="order.status"></span>
+                                    <span class="pos-badge pos-badge--warning"
+                                          x-show="order.total_refunded > 0"
+                                          style="display:none">
+                                        <?= $escaper->escapeHtml(__('Refunded:')) ?>
+                                        <span x-text="$store.posOrders.money(order.total_refunded)"></span>
+                                    </span>
+                                    <span class="pos-badge pos-badge--danger"
+                                          x-show="!order.can_refund"
+                                          style="display:none"><?= $escaper->escapeHtml(__('Not refundable')) ?></span>
+                                </span>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </template>
+
+            <!-- Refund builder -->
+            <template x-if="$store.posOrders.selected && !$store.posOrders.result">
+                <div>
+                    <div class="pos-row">
+                        <button type="button" class="pos-btn pos-btn--ghost pos-btn--sm" @click="$store.posOrders.backToList()">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-restore"/></svg>
+                            <?= $escaper->escapeHtml(__('Back')) ?>
+                        </button>
+                        <strong x-text="'#' + $store.posOrders.selected.increment_id"></strong>
+                        <span class="pos-badge" x-text="$store.posOrders.selected.status"></span>
+                    </div>
+
+                    <!-- Order card -->
+                    <dl class="pos-kv">
+                        <dt><?= $escaper->escapeHtml(__('Order')) ?></dt>
+                        <dd x-text="'#' + $store.posOrders.selected.increment_id"></dd>
+                        <dt><?= $escaper->escapeHtml(__('Date')) ?></dt>
+                        <dd x-text="$store.posOrders.formatDate($store.posOrders.selected.created_at)"></dd>
+                        <dt><?= $escaper->escapeHtml(__('Customer')) ?></dt>
+                        <dd>
+                            <span x-text="$store.posOrders.selected.customer_name"></span>
+                            <span class="pos-muted" x-show="$store.posOrders.selected.customer_email"
+                                  x-text="$store.posOrders.selected.customer_email"></span>
+                        </dd>
+                        <dt><?= $escaper->escapeHtml(__('Grand total')) ?></dt>
+                        <dd><span class="pos-amount" x-text="$store.posOrders.money($store.posOrders.selected.grand_total)"></span></dd>
+                        <template x-if="$store.posOrders.selected.total_refunded > 0">
+                            <dt><?= $escaper->escapeHtml(__('Already refunded')) ?></dt>
+                        </template>
+                        <template x-if="$store.posOrders.selected.total_refunded > 0">
+                            <dd><span class="pos-amount pos-text-danger" x-text="$store.posOrders.money($store.posOrders.selected.total_refunded)"></span></dd>
+                        </template>
+                    </dl>
+
+                    <!-- Lines with refundable qty steppers -->
+                    <div class="pos-row pos-row--stack">
+                        <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Items to refund')) ?></h3>
+                        <button type="button" class="pos-btn pos-btn--sm" @click="$store.posOrders.selectAll()">
+                            <?= $escaper->escapeHtml(__('All')) ?>
+                        </button>
+                        <button type="button" class="pos-btn pos-btn--sm" @click="$store.posOrders.clearAll()">
+                            <?= $escaper->escapeHtml(__('None')) ?>
+                        </button>
+                    </div>
+                    <ul class="pos-list">
+                        <template x-for="item in $store.posOrders.selected.items" :key="item.item_id">
+                            <li class="pos-list__item">
+                                <span class="pos-list__item-info">
+                                    <strong x-text="item.name"></strong>
+                                    <span class="pos-muted" x-text="item.sku"></span>
+                                    <span class="pos-muted">
+                                        <span class="pos-amount" x-text="$store.posOrders.money(item.price)"></span>
+                                        &times; <span class="pos-amount" x-text="item.qty_ordered"></span>
+                                        <template x-if="item.qty_refunded > 0">
+                                            <span>(<span x-text="item.qty_refunded"></span> <?= $escaper->escapeHtml(__('refunded')) ?>)</span>
+                                        </template>
+                                    </span>
+                                    <span class="pos-muted">
+                                        <?= $escaper->escapeHtml(__('Refundable:')) ?>
+                                        <span class="pos-amount" x-text="$store.posOrders.money($store.posOrders.refundableUnit(item))"></span>
+                                        <?= $escaper->escapeHtml(__('/ unit')) ?>
+                                    </span>
+                                </span>
+                                <span class="pos-stepper" :class="{'pos-stepper--disabled': item.qty_available <= 0}">
+                                    <button type="button"
+                                            class="pos-stepper__btn"
+                                            :disabled="$store.posOrders.itemQty(item) <= 0"
+                                            @click="$store.posOrders.dec(item)"
+                                            aria-label="<?= $escaper->escapeHtmlAttr(__('Decrease quantity')) ?>">
+                                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-minus"/></svg>
+                                    </button>
+                                    <input type="number"
+                                           class="pos-stepper__value"
+                                           min="0"
+                                           :max="item.qty_available"
+                                           :value="$store.posOrders.itemQty(item)"
+                                           @change="$store.posOrders.setQty(item, $event.target.value)">
+                                    <button type="button"
+                                            class="pos-stepper__btn"
+                                            :disabled="$store.posOrders.itemQty(item) >= item.qty_available"
+                                            @click="$store.posOrders.inc(item)"
+                                            aria-label="<?= $escaper->escapeHtmlAttr(__('Increase quantity')) ?>">
+                                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                                    </button>
+                                </span>
+                                <strong class="pos-amount"
+                                        x-text="$store.posOrders.money($store.posOrders.lineAmount(item))"></strong>
+                            </li>
+                        </template>
+                    </ul>
+
+                    <!-- Refund payment split -->
+                    <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Refund payment split')) ?></h3>
+                    <ul class="pos-list">
+                        <template x-for="(row, idx) in $store.posOrders.payments" :key="idx">
+                            <li class="pos-payment-row">
+                                <select class="pos-select" x-model="row.method_code">
+                                    <template x-for="method in $store.posOrders.methods()" :key="method.code">
+                                        <option :value="method.code" x-text="method.title"></option>
+                                    </template>
+                                </select>
+                                <input type="number"
+                                       class="pos-input"
+                                       step="0.01"
+                                       min="0"
+                                       x-model.number="row.amount"
+                                       @input="$store.posOrders.touchPayments()">
+                                <input type="text"
+                                       class="pos-input"
+                                       placeholder="<?= $escaper->escapeHtmlAttr(__('Reference')) ?>"
+                                       x-show="$store.posOrders.requiresReference(row.method_code)"
+                                       style="display:none"
+                                       x-model="row.reference">
+                                <button type="button"
+                                        class="pos-btn pos-btn--ghost pos-btn--sm"
+                                        x-show="$store.posOrders.payments.length > 1"
+                                        style="display:none"
+                                        @click="$store.posOrders.removePayment(idx)"
+                                        aria-label="<?= $escaper->escapeHtmlAttr(__('Remove payment row')) ?>">
+                                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-x"/></svg>
+                                </button>
+                            </li>
+                        </template>
+                    </ul>
+                    <button type="button" class="pos-btn pos-btn--ghost pos-btn--sm" @click="$store.posOrders.addPayment()">
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                        <?= $escaper->escapeHtml(__('Split payment')) ?>
+                    </button>
+
+                    <!-- Restock + reason -->
+                    <div class="pos-row pos-row--stack">
+                        <label class="pos-toggle">
+                            <input type="checkbox" x-model="$store.posOrders.restock">
+                            <span><?= $escaper->escapeHtml(__('Return items to stock')) ?></span>
+                        </label>
+                    </div>
+                    <div class="pos-row pos-row--stack">
+                        <input type="text"
+                               class="pos-input"
+                               placeholder="<?= $escaper->escapeHtmlAttr(__('Reason (optional)')) ?>"
+                               x-model="$store.posOrders.reason">
+                    </div>
+
+                    <!-- Totals + confirm (refund total is SERVER-computed) -->
+                    <dl class="pos-kv">
+                        <dt><?= $escaper->escapeHtml(__('Refund total')) ?></dt>
+                        <dd>
+                            <strong class="pos-amount"
+                                    x-show="!$store.posOrders.previewing"
+                                    x-text="$store.posOrders.money($store.posOrders.refundTotal())"></strong>
+                            <span class="pos-muted"
+                                  x-show="$store.posOrders.previewing"
+                                  style="display:none"><?= $escaper->escapeHtml(__('Calculating...')) ?></span>
+                        </dd>
+                        <dt><?= $escaper->escapeHtml(__('Payments')) ?></dt>
+                        <dd><span class="pos-amount" x-text="$store.posOrders.money($store.posOrders.paymentsTotal())"></span></dd>
+                    </dl>
+                    <p class="pos-text-danger"
+                       x-show="!$store.posOrders.previewing && $store.posOrders.refundTotal() > 0 && !$store.posOrders.paymentsMatch()"
+                       style="display:none">
+                        <span x-text="$store.posOrders.money($store.posOrders.paymentsTotal())"></span>
+                        <?= $escaper->escapeHtml(__('must equal')) ?>
+                        <span x-text="$store.posOrders.money($store.posOrders.refundTotal())"></span>
+                    </p>
+                    <p class="pos-text-danger"
+                       x-show="!$store.posOrders.canRefund()"
+                       style="display:none"><?= $escaper->escapeHtml(__('You do not have permission to refund orders.')) ?></p>
+                    <button type="button"
+                            class="pos-btn pos-btn--danger-solid pos-btn--lg pos-btn--block"
+                            :disabled="!$store.posOrders.canSubmit() || !$store.posOrders.canRefund()"
+                            @click="$store.posOrders.confirm()">
+                        <span x-show="!$store.posOrders.submitting"><?= $escaper->escapeHtml(__('Confirm Refund')) ?></span>
+                        <span x-show="$store.posOrders.submitting" style="display:none"><?= $escaper->escapeHtml(__('Refunding...')) ?></span>
+                    </button>
+                </div>
+            </template>
+
+            <!-- Result -->
+            <template x-if="$store.posOrders.result">
+                <div>
+                    <h3 class="pos-section-title pos-text-success">
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-check"/></svg>
+                        <?= $escaper->escapeHtml(__('Refund completed')) ?>
+                    </h3>
+                    <dl class="pos-kv">
+                        <dt><?= $escaper->escapeHtml(__('Credit memo')) ?></dt>
+                        <dd x-text="$store.posOrders.result.creditmemo_increment_id"></dd>
+                        <dt><?= $escaper->escapeHtml(__('Order')) ?></dt>
+                        <dd x-text="'#' + $store.posOrders.result.order_increment_id"></dd>
+                        <dt><?= $escaper->escapeHtml(__('Refunded total')) ?></dt>
+                        <dd><strong class="pos-amount" x-text="$store.posOrders.money($store.posOrders.result.refunded_total)"></strong></dd>
+                        <dt><?= $escaper->escapeHtml(__('Cash from drawer')) ?></dt>
+                        <dd><span class="pos-amount" x-text="$store.posOrders.money($store.posOrders.result.cash_refunded)"></span></dd>
+                        <dt><?= $escaper->escapeHtml(__('Restocked')) ?></dt>
+                        <dd>
+                            <span x-show="$store.posOrders.result.restocked"><?= $escaper->escapeHtml(__('Yes')) ?></span>
+                            <span x-show="!$store.posOrders.result.restocked" style="display:none"><?= $escaper->escapeHtml(__('No')) ?></span>
+                        </dd>
+                    </dl>
+                    <div class="pos-row">
+                        <button type="button"
+                                class="pos-btn pos-btn--primary"
+                                @click="$store.posOrders.backToList()">
+                            <?= $escaper->escapeHtml(__('New Refund')) ?>
+                        </button>
+                        <button type="button"
+                                class="pos-btn"
+                                @click="$store.posOrders.close()">
+                            <?= $escaper->escapeHtml(__('Close')) ?>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>

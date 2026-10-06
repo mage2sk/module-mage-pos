@@ -1,0 +1,176 @@
+<!--@subject {{trans "Your receipt %receipt_number from %store_name" receipt_number=$receipt_number store_name=$store_name}} @-->
+<!--@vars {
+"var store_name":"Store Name",
+"var store_address":"Store Address",
+"var receipt_logo_url":"Receipt Logo URL",
+"var header":"Receipt Header Text",
+"var footer":"Receipt Footer Text",
+"var receipt_number":"Receipt Number",
+"var increment_id":"Order Increment Id",
+"var date":"Receipt Date",
+"var register_name":"Register Name",
+"var cashier_name":"Cashier Name",
+"var customer_name":"Customer Name",
+"var note":"Order Note",
+"var items":"Receipt Item Rows (each with options_html: pre-rendered chosen-options block)",
+"var totals.subtotal_formatted":"Subtotal",
+"var totals.discount_formatted":"Discount",
+"var totals.tax_formatted":"Tax",
+"var totals.shipping_formatted":"Shipping",
+"var totals.adjustment_formatted":"Other Charges",
+"var totals.grand_total_formatted":"Grand Total",
+"var tax_breakdown":"Tax Breakdown Rows",
+"var payments":"Payment Rows",
+"var change_due_formatted":"Change Due"
+} @-->
+{{template config_path="design/email/header_template"}}
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#333333;">
+    <tr>
+        <td align="center" style="padding:0 0 16px 0;">
+            {{depend receipt_logo_url}}
+            <img src="{{var receipt_logo_url}}" alt="{{var store_name}}" style="max-width:180px;max-height:90px;" /><br />
+            {{/depend}}
+            <span style="font-size:18px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">{{var store_name}}</span>
+            {{depend store_address}}
+            <br /><span style="font-size:12px;color:#666666;white-space:pre-line;">{{var store_address}}</span>
+            {{/depend}}
+            {{depend header}}
+            <br /><span style="font-size:12px;color:#666666;white-space:pre-line;">{{var header}}</span>
+            {{/depend}}
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:0 0 16px 0;">
+            <table width="100%" border="0" cellspacing="0" cellpadding="2" style="font-size:13px;border-top:1px dashed #bbbbbb;border-bottom:1px dashed #bbbbbb;">
+                <tr>
+                    <td style="color:#666666;">{{trans "Receipt #"}}</td>
+                    <td align="right"><strong>{{var receipt_number}}</strong></td>
+                </tr>
+                <tr>
+                    <td style="color:#666666;">{{trans "Order #"}}</td>
+                    <td align="right">{{var increment_id}}</td>
+                </tr>
+                <tr>
+                    <td style="color:#666666;">{{trans "Date"}}</td>
+                    <td align="right">{{var date}}</td>
+                </tr>
+                {{depend register_name}}
+                <tr>
+                    <td style="color:#666666;">{{trans "Register"}}</td>
+                    <td align="right">{{var register_name}}</td>
+                </tr>
+                {{/depend}}
+                {{depend cashier_name}}
+                <tr>
+                    <td style="color:#666666;">{{trans "Cashier"}}</td>
+                    <td align="right">{{var cashier_name}}</td>
+                </tr>
+                {{/depend}}
+                {{depend customer_name}}
+                <tr>
+                    <td style="color:#666666;">{{trans "Customer"}}</td>
+                    <td align="right">{{var customer_name}}</td>
+                </tr>
+                {{/depend}}
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:0 0 8px 0;">
+            <table width="100%" border="0" cellspacing="0" cellpadding="4" style="font-size:13px;">
+                <thead>
+                <tr>
+                    <th align="left" style="border-bottom:1px solid #dddddd;">{{trans "Item"}}</th>
+                    <th align="right" style="border-bottom:1px solid #dddddd;white-space:nowrap;">{{trans "Total"}}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {{for item in items}}
+                <tr>
+                    <td style="border-bottom:1px solid #f0f0f0;">
+                        <strong>{{var item.name}}</strong><br />
+                        {{var item.options_html}}
+                        <span style="color:#666666;font-size:12px;">{{var item.qty_formatted}} &times; {{var item.price_formatted}} {{var item.discount_formatted}}</span>
+                        <span style="color:#999999;font-size:12px;font-style:italic;">{{var item.note}}</span>
+                    </td>
+                    <td align="right" valign="top" style="border-bottom:1px solid #f0f0f0;white-space:nowrap;">{{var item.row_total_formatted}}</td>
+                </tr>
+                {{/for}}
+                </tbody>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:0 0 16px 0;">
+            <table width="100%" border="0" cellspacing="0" cellpadding="2" style="font-size:13px;">
+                <tr>
+                    <td style="color:#666666;">{{trans "Subtotal"}}</td>
+                    <td align="right">{{var totals.subtotal_formatted}}</td>
+                </tr>
+                {{depend totals.discount_formatted}}
+                <tr>
+                    <td style="color:#666666;">{{trans "Discount"}}</td>
+                    <td align="right">{{var totals.discount_formatted}}</td>
+                </tr>
+                {{/depend}}
+                <tr>
+                    <td style="color:#666666;">{{trans "Tax"}}</td>
+                    <td align="right">{{var totals.tax_formatted}}</td>
+                </tr>
+                {{for taxrow in tax_breakdown}}
+                <tr>
+                    <td style="color:#999999;font-size:12px;padding-left:12px;">{{var taxrow.label}}</td>
+                    <td align="right" style="color:#999999;font-size:12px;">{{var taxrow.amount_formatted}}</td>
+                </tr>
+                {{/for}}
+                {{depend totals.shipping_formatted}}
+                <tr>
+                    <td style="color:#666666;">{{trans "Shipping"}}</td>
+                    <td align="right">{{var totals.shipping_formatted}}</td>
+                </tr>
+                {{/depend}}
+                {{depend totals.adjustment_formatted}}
+                <tr>
+                    <td style="color:#666666;">{{trans "Other charges"}}</td>
+                    <td align="right">{{var totals.adjustment_formatted}}</td>
+                </tr>
+                {{/depend}}
+                <tr>
+                    <td style="font-size:15px;font-weight:bold;border-top:1px solid #dddddd;padding-top:6px;">{{trans "Total"}}</td>
+                    <td align="right" style="font-size:15px;font-weight:bold;border-top:1px solid #dddddd;padding-top:6px;">{{var totals.grand_total_formatted}}</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:0 0 16px 0;">
+            <table width="100%" border="0" cellspacing="0" cellpadding="2" style="font-size:13px;border-top:1px dashed #bbbbbb;">
+                {{for payment in payments}}
+                <tr>
+                    <td style="color:#666666;">{{var payment.method_title}} <span style="color:#999999;font-size:12px;">{{var payment.reference}}</span></td>
+                    <td align="right">{{var payment.amount_formatted}}</td>
+                </tr>
+                {{/for}}
+                {{depend change_due_formatted}}
+                <tr>
+                    <td style="font-weight:bold;">{{trans "Change"}}</td>
+                    <td align="right" style="font-weight:bold;">{{var change_due_formatted}}</td>
+                </tr>
+                {{/depend}}
+            </table>
+        </td>
+    </tr>
+    {{depend note}}
+    <tr>
+        <td style="padding:0 0 16px 0;font-size:12px;color:#666666;white-space:pre-line;">{{var note}}</td>
+    </tr>
+    {{/depend}}
+    {{depend footer}}
+    <tr>
+        <td align="center" style="padding:8px 0 0 0;border-top:1px dashed #bbbbbb;font-size:12px;color:#666666;white-space:pre-line;">{{var footer}}</td>
+    </tr>
+    {{/depend}}
+</table>
+
+{{template config_path="design/email/footer_template"}}

@@ -1,0 +1,213 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal modal: product quick view (UI-fix contract item 23) - larger
+ * image/gallery, name, SKU, final + struck original price, sanitized short
+ * and full description, MSI-aware salable qty, front-visible attributes and
+ * a qty + Add-to-cart action. Backed by Alpine.store('posProduct')
+ * (catalog.js) <- GET pos/catalog/product?id=...
+ *
+ * Opened from the quick-view affordance on product cards
+ * ($store.posProduct.show(id)); adding routes through the same
+ * 'pos:add-product' contract as the grid, so option-less one-tap add on the
+ * card stays untouched. Composite / custom-option products (UI-fix contract
+ * item 34) swap the plain add for an "Add with options" button that hands
+ * over to the options modal ($store.posOptions, modal-options.phtml) and
+ * show their price as "From <price>". Descriptions are sanitized server-side
+ * (CatalogService::sanitizeHtml) before the x-html render here.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<div class="pos-modal-backdrop"
+     data-modal="product"
+     x-data
+     x-show="$store.posProduct.open"
+     style="display:none"
+     @click.self="$store.posProduct.close()"
+     @keydown.escape.window="$store.posProduct.open && $store.posProduct.close()">
+    <div class="pos-modal pos-modal--lg pos-product-detail" role="dialog" aria-modal="true"
+         aria-label="<?= $escaper->escapeHtmlAttr(__('Product details')) ?>">
+        <div class="pos-modal__header">
+            <h2 class="pos-modal__title"
+                x-text="$store.posProduct.product ? $store.posProduct.product.name : '<?= $escaper->escapeJs(__('Product details')) ?>'"></h2>
+            <button type="button"
+                    class="pos-modal__close"
+                    @click="$store.posProduct.close()"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+
+        <div class="pos-modal__body">
+            <!-- Loading -->
+            <div class="pos-empty" x-show="$store.posProduct.busy">
+                <span class="pos-spinner" aria-hidden="true"></span>
+                <span class="pos-empty__text"><?= $escaper->escapeHtml(__('Loading product...')) ?></span>
+            </div>
+
+            <!-- Load failure -->
+            <div class="pos-empty" x-show="!$store.posProduct.busy && !$store.posProduct.product">
+                <span class="pos-empty__icon" aria-hidden="true">
+                    <svg class="pos-icon"><use href="#pi-empty-search"/></svg>
+                </span>
+                <span class="pos-empty__text"
+                      x-text="$store.posProduct.error || '<?= $escaper->escapeJs(__('Product not found.')) ?>'"></span>
+            </div>
+
+            <template x-if="!$store.posProduct.busy && $store.posProduct.product">
+                <div>
+                    <!-- Media + facts: two columns when there is room, one when narrow -->
+                    <div class="pos-product-detail__layout"
+                         style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--pos-sp-5);align-items:start;">
+                        <!-- Gallery -->
+                        <div class="pos-product-detail__media">
+                            <img class="pos-product-card__image pos-product-detail__image"
+                                 style="aspect-ratio:1/1;width:100%;"
+                                 :src="$store.posProduct.image()"
+                                 :alt="$store.posProduct.product.name">
+                            <div class="pos-product-detail__thumbs"
+                                 x-show="$store.posProduct.galleryImages().length > 1"
+                                 style="display:flex;flex-wrap:wrap;gap:var(--pos-sp-2);margin-top:var(--pos-sp-2);">
+                                <template x-for="(img, i) in $store.posProduct.galleryImages()" :key="i">
+                                    <button type="button"
+                                            class="pos-product-detail__thumb"
+                                            :style="'width:56px;height:56px;padding:2px;cursor:pointer;background:var(--pos-surface-2);border-radius:var(--pos-radius-sm);border:2px solid ' + (i === $store.posProduct.galleryIndex ? 'var(--pos-accent)' : 'var(--pos-border)') + ';'"
+                                            @click="$store.posProduct.galleryIndex = i"
+                                            :aria-label="'<?= $escaper->escapeJs(__('Image')) ?> ' + (i + 1)">
+                                        <img :src="img" alt="" loading="lazy"
+                                             style="width:100%;height:100%;object-fit:contain;border-radius:calc(var(--pos-radius-sm) - 2px);">
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Facts -->
+                        <div class="pos-product-detail__facts">
+                            <span class="pos-product-card__sku" style="color:var(--pos-text-muted);"
+                                  x-text="$store.posProduct.product.sku"></span>
+
+                            <!-- Price: final, with struck original when discounted -->
+                            <div class="pos-product-detail__price"
+                                 style="display:flex;align-items:baseline;gap:var(--pos-sp-2);margin:var(--pos-sp-2) 0 var(--pos-sp-3);">
+                                <span class="pos-amount"
+                                      style="font-family:var(--pos-font-display);font-size:var(--pos-fs-2xl);font-weight:800;"
+                                      x-text="($store.posProduct.needsOptions() ? '<?= $escaper->escapeJs(__('From')) ?> ' : '') + $store.posProduct.money($store.posProduct.product.price)"></span>
+                                <template x-if="$store.posProduct.product.original_price != null && !$store.posProduct.needsOptions()">
+                                    <span class="pos-amount"
+                                          style="text-decoration:line-through;color:var(--pos-text-muted);font-size:var(--pos-fs-md);"
+                                          x-text="$store.posProduct.money($store.posProduct.product.original_price)"></span>
+                                </template>
+                            </div>
+
+                            <!-- Stock (MSI salable qty for the register's stock) -->
+                            <div class="pos-product-detail__stock" style="margin-bottom:var(--pos-sp-4);">
+                                <template x-if="$store.posProduct.product.in_stock === false">
+                                    <span class="pos-badge pos-badge--danger"><?= $escaper->escapeHtml(__('Out of stock')) ?></span>
+                                </template>
+                                <template x-if="$store.posProduct.product.in_stock !== false && $store.posProduct.product.low_stock">
+                                    <span class="pos-badge pos-badge--warning"
+                                          x-text="'<?= $escaper->escapeJs(__('Low stock')) ?> · ' + Math.floor($store.posProduct.product.salable_qty)"></span>
+                                </template>
+                                <template x-if="$store.posProduct.product.in_stock !== false && !$store.posProduct.product.low_stock">
+                                    <span class="pos-badge pos-badge--success"
+                                          x-text="$store.posProduct.product.salable_qty != null
+                                              ? '<?= $escaper->escapeJs(__('In stock')) ?> · ' + Math.floor($store.posProduct.product.salable_qty)
+                                              : '<?= $escaper->escapeJs(__('In stock')) ?>'"></span>
+                                </template>
+                            </div>
+
+                            <!-- Short description (sanitized server-side) -->
+                            <div class="pos-muted pos-product-detail__short"
+                                 x-show="$store.posProduct.product.short_description"
+                                 x-html="$store.posProduct.product.short_description"></div>
+
+                            <!-- Key attributes -->
+                            <template x-if="$store.posProduct.product.attributes && $store.posProduct.product.attributes.length">
+                                <div style="margin-top:var(--pos-sp-4);">
+                                    <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Details')) ?></h3>
+                                    <dl class="pos-kv">
+                                        <template x-for="attr in $store.posProduct.product.attributes" :key="attr.code">
+                                            <div style="display:contents;">
+                                                <dt x-text="attr.label"></dt>
+                                                <dd x-text="attr.value"></dd>
+                                            </div>
+                                        </template>
+                                    </dl>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Full description (sanitized server-side; lives inside
+                         the scrollable .pos-modal__body and the class forbids
+                         any clamp/max-height, so long copy scrolls - never
+                         clips at the fold) -->
+                    <template x-if="$store.posProduct.product.description">
+                        <div class="pos-product-detail__description">
+                            <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Description')) ?></h3>
+                            <div x-html="$store.posProduct.product.description"></div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <div class="pos-modal__footer">
+            <!-- Qty + add to cart (one-tap path: simple/virtual/downloadable
+                 without custom options). Composite / custom-option products
+                 get "Add with options" instead (item 34). -->
+            <div class="pos-stepper"
+                 x-show="$store.posProduct.product && !$store.posProduct.needsOptions()"
+                 :class="{ 'pos-stepper--disabled': $store.posProduct.product && $store.posProduct.product.in_stock === false }">
+                <button type="button"
+                        class="pos-stepper__btn"
+                        :disabled="$store.posProduct.qty <= 1 || ($store.posProduct.product && $store.posProduct.product.in_stock === false)"
+                        @click="$store.posProduct.decQty()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Decrease quantity')) ?>">
+                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-minus"/></svg>
+                </button>
+                <input type="number"
+                       class="pos-stepper__value"
+                       min="1"
+                       max="999"
+                       inputmode="numeric"
+                       x-model.number="$store.posProduct.qty"
+                       @change="$store.posProduct.normalizeQty()"
+                       :disabled="$store.posProduct.product && $store.posProduct.product.in_stock === false"
+                       aria-label="<?= $escaper->escapeHtmlAttr(__('Quantity')) ?>">
+                <button type="button"
+                        class="pos-stepper__btn"
+                        :disabled="$store.posProduct.product && $store.posProduct.product.in_stock === false"
+                        @click="$store.posProduct.incQty()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Increase quantity')) ?>">
+                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                </button>
+            </div>
+            <button type="button"
+                    class="pos-btn pos-btn--primary"
+                    x-show="$store.posProduct.product && !$store.posProduct.needsOptions()"
+                    :disabled="$store.posProduct.busy || ($store.posProduct.product && $store.posProduct.product.in_stock === false)"
+                    @click="$store.posProduct.addToCart()">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-cart"/></svg>
+                <span><?= $escaper->escapeHtml(__('Add to cart')) ?></span>
+            </button>
+            <!-- Item 34: composite / custom-option products choose their
+                 options in the dedicated modal (same $store.posOptions flow
+                 as a catalog-card tap) -->
+            <button type="button"
+                    class="pos-btn pos-btn--primary"
+                    x-show="$store.posProduct.product && $store.posProduct.needsOptions()"
+                    :disabled="$store.posProduct.busy"
+                    @click="$store.posProduct.addWithOptions()">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-settings"/></svg>
+                <span><?= $escaper->escapeHtml(__('Add with options')) ?></span>
+            </button>
+            <button type="button" class="pos-btn pos-btn--ghost" @click="$store.posProduct.close()">
+                <?= $escaper->escapeHtml(__('Close')) ?>
+            </button>
+        </div>
+    </div>
+</div>

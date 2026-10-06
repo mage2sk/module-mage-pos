@@ -1,0 +1,183 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal panel: customer (spec §9) - attached-customer card with detach,
+ * debounced search with a results list (avatar initial, name / email / group)
+ * and the Guest / New Customer quick actions plus an inline create form.
+ * State lives in Alpine.store('posCustomer') (web/js/pos/customer.js),
+ * shared with modal-customer.phtml.
+ */
+declare(strict_types=1);
+
+/** @var \Panth\MagePos\Block\Terminal $block */
+/** @var \Magento\Framework\Escaper $escaper */
+
+// No dedicated avatar class exists in pos.css - token-driven inline circle.
+$avatarStyle = 'flex:0 0 auto;width:36px;height:36px;border-radius:50%;'
+    . 'display:inline-flex;align-items:center;justify-content:center;'
+    . 'background:var(--pos-accent-soft);color:var(--pos-accent);'
+    . 'font-family:var(--pos-font-display);font-weight:700;'
+    . 'font-size:var(--pos-fs-md);';
+
+?>
+<section class="pos-panel pos-panel--customer"
+         id="pos-panel-customer"
+         data-panel="customer"
+         x-data
+         x-cloak>
+    <header class="pos-panel__header" data-drag-handle>
+        <span class="pos-panel__drag" aria-hidden="true"></span>
+        <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Customer')) ?></span>
+        <div class="pos-panel__actions">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost pos-btn--icon"
+                    @click="$store.posCustomer.openModal()"
+                    title="<?= $escaper->escapeHtmlAttr(__('Open customer manager')) ?>"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Open customer manager')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-users"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="pos-panel__body pos-customer__body">
+        <!-- Attached customer card -->
+        <template x-if="$store.posCustomer.attached">
+            <ul class="pos-list">
+                <li class="pos-list__item pos-list__item--selected" style="cursor:default">
+                    <span style="<?= $escaper->escapeHtmlAttr($avatarStyle) ?>"
+                          aria-hidden="true"
+                          x-text="(($store.posCustomer.attached.name || '?').trim().charAt(0) || '?').toUpperCase()"></span>
+                    <span class="pos-list__item-info">
+                        <strong x-text="$store.posCustomer.attached.name"></strong>
+                        <span class="pos-muted" x-text="$store.posCustomer.attached.email"></span>
+                        <span class="pos-badge"
+                              style="align-self:flex-start"
+                              x-show="$store.posCustomer.attached.group"
+                              x-text="$store.posCustomer.attached.group"></span>
+                    </span>
+                    <button type="button"
+                            class="pos-btn pos-btn--ghost pos-btn--sm"
+                            :disabled="$store.posCustomer.attaching"
+                            @click="$store.posCustomer.guest()"
+                            title="<?= $escaper->escapeHtmlAttr(__('Detach customer')) ?>"
+                            aria-label="<?= $escaper->escapeHtmlAttr(__('Detach customer')) ?>">
+                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-x"/></svg>
+                    </button>
+                </li>
+            </ul>
+        </template>
+
+        <!-- Search -->
+        <div class="pos-search">
+            <svg class="pos-icon pos-icon--sm pos-search__icon" aria-hidden="true"><use href="#pi-search"/></svg>
+            <input type="search"
+                   class="pos-input"
+                   placeholder="<?= $escaper->escapeHtmlAttr(__('Search name or email...')) ?>"
+                   autocomplete="off"
+                   spellcheck="false"
+                   aria-label="<?= $escaper->escapeHtmlAttr(__('Search customers')) ?>"
+                   x-model="$store.posCustomer.query"
+                   @input="$store.posCustomer.onQueryInput()"
+                   @keydown.enter.prevent="$store.posCustomer.runSearch()">
+            <span class="pos-spinner"
+                  x-show="$store.posCustomer.searching"
+                  style="display:none;flex:0 0 auto;width:18px;height:18px;border-width:2px"
+                  aria-hidden="true"></span>
+        </div>
+
+        <!-- Results -->
+        <ul class="pos-list"
+            x-show="$store.posCustomer.results.length > 0"
+            style="display:none">
+            <template x-for="customer in $store.posCustomer.results" :key="customer.id">
+                <li class="pos-list__item"
+                    :class="{ 'pos-list__item--selected': $store.posCustomer.attached && $store.posCustomer.attached.id === customer.id }"
+                    @click="$store.posCustomer.select(customer)">
+                    <span style="<?= $escaper->escapeHtmlAttr($avatarStyle) ?>"
+                          aria-hidden="true"
+                          x-text="((customer.name || customer.email || '?').trim().charAt(0) || '?').toUpperCase()"></span>
+                    <span class="pos-list__item-info">
+                        <strong x-text="customer.name"></strong>
+                        <span class="pos-muted" x-text="customer.email"></span>
+                    </span>
+                    <span class="pos-list__item-meta">
+                        <span class="pos-badge"
+                              x-show="customer.group"
+                              x-text="customer.group"></span>
+                    </span>
+                </li>
+            </template>
+        </ul>
+
+        <!-- No results -->
+        <div class="pos-empty pos-customer__empty"
+             x-show="$store.posCustomer.searched && !$store.posCustomer.searching && !$store.posCustomer.results.length"
+             style="display:none">
+            <span class="pos-empty__icon" aria-hidden="true">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-empty-search"/></svg>
+            </span>
+            <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No customers found - try another name or email.')) ?></span>
+        </div>
+
+        <!-- Friendly idle state (guest sale hint) -->
+        <div class="pos-empty pos-customer__empty"
+             x-show="!$store.posCustomer.attached && !$store.posCustomer.searched && !$store.posCustomer.results.length && !$store.posCustomer.showCreate"
+             style="display:none">
+            <span class="pos-empty__icon" aria-hidden="true">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-user"/></svg>
+            </span>
+            <span class="pos-empty__text"><?= $escaper->escapeHtml(__('Guest sale - attach a customer for group pricing and order history.')) ?></span>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="pos-denominations">
+            <button type="button"
+                    class="pos-btn"
+                    :disabled="$store.posCustomer.attaching"
+                    @click="$store.posCustomer.guest()">
+                <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-user"/></svg>
+                <?= $escaper->escapeHtml(__('Guest')) ?>
+            </button>
+            <button type="button"
+                    class="pos-btn pos-btn--primary"
+                    @click="$store.posCustomer.toggleCreate()">
+                <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                <?= $escaper->escapeHtml(__('New Customer')) ?>
+            </button>
+        </div>
+
+        <!-- Inline create form -->
+        <form class="pos-form-grid"
+              x-show="$store.posCustomer.showCreate && !$store.posCustomer.modalOpen"
+              style="display:none"
+              @submit.prevent="$store.posCustomer.create()">
+            <label class="pos-field">
+                <span class="pos-field__label"><?= $escaper->escapeHtml(__('First name')) ?></span>
+                <input type="text" class="pos-input" autocomplete="off"
+                       x-model="$store.posCustomer.form.firstname">
+            </label>
+            <label class="pos-field">
+                <span class="pos-field__label"><?= $escaper->escapeHtml(__('Last name')) ?></span>
+                <input type="text" class="pos-input" autocomplete="off"
+                       x-model="$store.posCustomer.form.lastname">
+            </label>
+            <label class="pos-field pos-form-grid__full">
+                <span class="pos-field__label"><?= $escaper->escapeHtml(__('Email')) ?></span>
+                <input type="email" class="pos-input" autocomplete="off"
+                       x-model="$store.posCustomer.form.email">
+            </label>
+            <label class="pos-field pos-form-grid__full">
+                <span class="pos-field__label"><?= $escaper->escapeHtml(__('Phone (optional)')) ?></span>
+                <input type="tel" class="pos-input" autocomplete="off"
+                       x-model="$store.posCustomer.form.phone">
+            </label>
+            <button type="submit"
+                    class="pos-btn pos-btn--primary pos-form-submit"
+                    :disabled="$store.posCustomer.creating">
+                <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-check"/></svg>
+                <?= $escaper->escapeHtml(__('Create & Attach')) ?>
+            </button>
+        </form>
+    </div>
+</section>

@@ -1,0 +1,91 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS terminal - receipt modal: post-sale receipt actions and reprint of the
+ * last receipt (last order remembered in localStorage by receipt.js).
+ * Opens on `pos:receipt-show` {order} / `pos:receipt-open` window events.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<div class="pos-receipt-modal"
+     id="pos-modal-receipt"
+     x-data="posReceiptModal()"
+     x-show="open"
+     @click.self="close()"
+     x-cloak>
+    <div class="pos-receipt-modal__box" role="dialog" aria-modal="true">
+        <header class="pos-receipt-modal__header">
+            <strong><?= $escaper->escapeHtml(__('Receipt')) ?></strong>
+            <button type="button"
+                    class="pos-receipt-modal__close"
+                    @click="close()"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </header>
+
+        <div class="pos-receipt-modal__body">
+            <template x-if="order">
+                <div class="pos-receipt-modal__ticket">
+                    <span class="pos-receipt-modal__icon" aria-hidden="true">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-receipt"/></svg>
+                    </span>
+                    <dl class="pos-receipt-modal__meta">
+                        <div x-show="order.receipt_number">
+                            <dt><?= $escaper->escapeHtml(__('Receipt #')) ?></dt>
+                            <dd x-text="order.receipt_number"></dd>
+                        </div>
+                        <div x-show="order.increment_id">
+                            <dt><?= $escaper->escapeHtml(__('Order #')) ?></dt>
+                            <dd x-text="order.increment_id"></dd>
+                        </div>
+                        <div x-show="placedAtLabel()">
+                            <dt><?= $escaper->escapeHtml(__('Placed')) ?></dt>
+                            <dd x-text="placedAtLabel()"></dd>
+                        </div>
+                        <div x-show="Number(order.change_due) > 0">
+                            <dt><?= $escaper->escapeHtml(__('Change given')) ?></dt>
+                            <dd class="pos-amount" x-text="money(order.change_due)"></dd>
+                        </div>
+                        <div x-show="order.grand_total != null && order.grand_total !== ''">
+                            <dt><?= $escaper->escapeHtml(__('Total')) ?></dt>
+                            <dd class="pos-receipt-modal__total pos-amount"
+                                x-text="money(order.grand_total)"></dd>
+                        </div>
+                    </dl>
+                </div>
+            </template>
+            <p class="pos-receipt-modal__empty" x-show="!order">
+                <?= $escaper->escapeHtml(__('No receipt available yet - complete a sale first.')) ?>
+            </p>
+        </div>
+
+        <footer class="pos-receipt-modal__footer">
+            <button type="button"
+                    class="pos-receipt-modal__btn pos-receipt-modal__btn--ghost"
+                    :disabled="!order"
+                    @click="view()">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-printer"/></svg>
+                <span><?= $escaper->escapeHtml(__('View / Print')) ?></span>
+            </button>
+            <button type="button"
+                    class="pos-receipt-modal__btn pos-receipt-modal__btn--ghost"
+                    :disabled="!order"
+                    @click="window.location.href = 'mailto:' + encodeURIComponent(order.customer_email || '')
+                        + '?subject=' + encodeURIComponent(t('receipt', 'Receipt') + ' ' + (order.receipt_number || order.increment_id || ''))
+                        + '&body=' + encodeURIComponent(window.PosReceipt.receiptUrl(order.order_id, order.receipt_token))">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-mail"/></svg>
+                <span><?= $escaper->escapeHtml(__('Email')) ?></span>
+            </button>
+            <button type="button"
+                    class="pos-receipt-modal__btn pos-receipt-modal__btn--accent"
+                    @click="newSale()">
+                <span><?= $escaper->escapeHtml(__('New Sale')) ?></span>
+            </button>
+        </footer>
+    </div>
+</div>
+<?php /* Styles for .pos-receipt-modal__* live in view/frontend/web/css/pos.css §18c. */ ?>

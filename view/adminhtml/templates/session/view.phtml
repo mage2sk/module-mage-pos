@@ -1,0 +1,280 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Admin POS session detail - Z-report style page: session header, totals by
+ * payment method, cash reconciliation and cash drawer movements.
+ *
+ * @var \Panth\MagePos\Block\Adminhtml\Session\View $block
+ */
+
+$session = $block->getSession();
+?>
+<style>
+.panth-pos-report { max-width: none; }
+.panth-pos-report h2 { font-size: 1.7rem; font-weight: 600; color: #41362f; margin: 3rem 0 1.2rem; border-bottom: 1px solid #ccc; padding-bottom: .8rem; }
+.panth-pos-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.panth-pos-toolbar .actions { display: flex; gap: 8px; }
+.panth-pos-report .data-grid td.num, .panth-pos-report .data-grid th.num,
+.panth-pos-report .admin__table-secondary td.num { text-align: right; white-space: nowrap; }
+.panth-pos-report .data-grid tr.totals td { font-weight: 700; }
+.panth-pos-recon-wrap { max-width: 520px; }
+.panth-pos-header-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.panth-pos-card { flex: 1 1 180px; min-width: 160px; background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; padding: 12px 16px; }
+.panth-pos-card .label { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #6b6b6b; margin-bottom: 4px; }
+.panth-pos-card .value { font-size: 15px; font-weight: 600; color: #303030; }
+.panth-pos-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.panth-pos-badge.open { background: #d4f4d4; color: #1e7e1e; }
+.panth-pos-badge.closed { background: #e8e8e8; color: #555; }
+.panth-pos-amount.negative { color: #b30000; }
+.panth-pos-amount.positive { color: #1e7e1e; }
+.panth-pos-note { margin-top: 12px; background: #fffbe5; border: 1px solid #f0e6b8; border-radius: 4px; padding: 10px 14px; font-size: 13px; }
+.panth-pos-pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: .8rem 0; font-size: 1.3rem; color: #41362f; }
+.panth-pos-pager-pages { display: flex; list-style: none; margin: 0; padding: 0; gap: 3px; }
+.panth-pos-pager-pages li { margin: 0; }
+.panth-pos-pager-action { box-sizing: border-box; display: inline-block; min-width: 2.8rem; padding: .4rem .7rem; text-align: center; border: 1px solid #adadad; background: #e3e3e3; color: #514943; text-decoration: none; line-height: 1.4; }
+a.panth-pos-pager-action:hover { background: #dbdbdb; color: #514943; text-decoration: none; }
+.panth-pos-pager-action.current { background: #514943; border-color: #514943; color: #fff; font-weight: 600; }
+.panth-pos-pager-action.disabled { opacity: .4; cursor: default; }
+.panth-pos-pager-gap { display: inline-block; padding: .4rem .3rem; color: #6b6b6b; }
+</style>
+
+<div class="panth-pos-report">
+<?php if ($session === null): ?>
+    <div class="message message-error error">
+        <div><?= $block->escapeHtml(__('The requested POS session could not be loaded.')) ?></div>
+    </div>
+    <a class="action-default" href="<?= $block->escapeUrl($block->getBackUrl()) ?>">
+        <span><?= $block->escapeHtml(__('Back to Sessions')) ?></span>
+    </a>
+<?php else: ?>
+    <?php
+    $isOpen = $block->isOpen();
+    $cash = $block->getCashSummary();
+    $paymentTotals = $block->getPaymentTotals();
+    $movements = $block->getMovements();
+    $typeLabels = [
+        'float' => __('Opening Float'),
+        'sale' => __('Sale'),
+        'refund' => __('Refund'),
+        'in' => __('Cash In'),
+        'out' => __('Cash Out'),
+        'close' => __('Close'),
+    ];
+    ?>
+    <div class="panth-pos-toolbar">
+        <span class="panth-pos-badge <?= $isOpen ? 'open' : 'closed' ?>">
+            <?= $block->escapeHtml($isOpen ? __('Open') : __('Closed')) ?>
+        </span>
+        <div class="actions">
+            <a class="action-default" href="<?= $block->escapeUrl($block->getBackUrl()) ?>">
+                <span><?= $block->escapeHtml(__('Back to Sessions')) ?></span>
+            </a>
+            <?php if ($isOpen): ?>
+                <form method="post"
+                      action="<?= $block->escapeUrl($block->getForceCloseUrl()) ?>"
+                      style="display:inline"
+                      onsubmit="return confirm('<?= $block->escapeJs(__('Force close this session with counted cash equal to expected cash?')) ?>');">
+                    <input type="hidden" name="form_key" value="<?= $block->escapeHtmlAttr($block->getFormKey()) ?>"/>
+                    <button type="submit" class="action-primary">
+                        <span><?= $block->escapeHtml(__('Force Close')) ?></span>
+                    </button>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="panth-pos-header-grid">
+        <div class="panth-pos-card">
+            <div class="label"><?= $block->escapeHtml(__('Session')) ?></div>
+            <div class="value">#<?= (int)$session->getSessionId() ?></div>
+        </div>
+        <div class="panth-pos-card">
+            <div class="label"><?= $block->escapeHtml(__('Register')) ?></div>
+            <div class="value"><?= $block->escapeHtml($block->getRegisterName() ?? (string)__('Unknown')) ?></div>
+        </div>
+        <div class="panth-pos-card">
+            <div class="label"><?= $block->escapeHtml(__('Cashier')) ?></div>
+            <div class="value"><?= $block->escapeHtml($block->getCashierName() ?? (string)__('Unknown')) ?></div>
+        </div>
+        <div class="panth-pos-card">
+            <div class="label"><?= $block->escapeHtml(__('Opened At')) ?></div>
+            <div class="value">
+                <?= $block->escapeHtml(
+                    $session->getOpenedAt()
+                        ? $block->formatDate($session->getOpenedAt(), \IntlDateFormatter::MEDIUM, true)
+                        : '-'
+                ) ?>
+            </div>
+        </div>
+        <div class="panth-pos-card">
+            <div class="label"><?= $block->escapeHtml(__('Closed At')) ?></div>
+            <div class="value">
+                <?= $block->escapeHtml(
+                    $session->getClosedAt()
+                        ? $block->formatDate($session->getClosedAt(), \IntlDateFormatter::MEDIUM, true)
+                        : '-'
+                ) ?>
+            </div>
+        </div>
+        <div class="panth-pos-card">
+            <div class="label"><?= $block->escapeHtml(__('Orders')) ?></div>
+            <div class="value"><?= (int)$block->getOrdersCount() ?></div>
+        </div>
+        <div class="panth-pos-card">
+            <div class="label"><?= $block->escapeHtml(__('Gross Sales')) ?></div>
+            <div class="value"><?= $block->escapeHtml($block->formatMoney($block->getGross())) ?></div>
+        </div>
+    </div>
+
+    <?php if ($session->getNote()): ?>
+        <div class="panth-pos-note">
+            <strong><?= $block->escapeHtml(__('Note:')) ?></strong>
+            <?= $block->escapeHtml($session->getNote()) ?>
+        </div>
+    <?php endif; ?>
+
+    <h2><?= $block->escapeHtml($isOpen ? __('Totals by Payment Method (X Report - session still open)') : __('Totals by Payment Method (Z Report)')) ?></h2>
+    <div class="admin__data-grid-wrap admin__data-grid-wrap-static">
+        <table class="data-grid data-grid-draggable">
+            <thead>
+                <tr>
+                    <th class="data-grid-th"><span><?= $block->escapeHtml(__('Payment Method')) ?></span></th>
+                    <th class="data-grid-th"><span><?= $block->escapeHtml(__('Code')) ?></span></th>
+                    <th class="data-grid-th num"><span><?= $block->escapeHtml(__('Orders')) ?></span></th>
+                    <th class="data-grid-th num"><span><?= $block->escapeHtml(__('Amount')) ?></span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($paymentTotals)): ?>
+                    <tr class="data-grid-tr-no-data">
+                        <td colspan="4"><?= $block->escapeHtml(__('No payments were taken in this session.')) ?></td>
+                    </tr>
+                <?php else: ?>
+                    <?php $paymentsTotal = 0.0; ?>
+                    <?php foreach ($paymentTotals as $row): ?>
+                        <?php $paymentsTotal += (float)($row['amount'] ?? 0); ?>
+                        <tr class="data-row">
+                            <td><div class="data-grid-cell-content"><?= $block->escapeHtml((string)($row['method_title'] ?? '')) ?></div></td>
+                            <td><div class="data-grid-cell-content"><?= $block->escapeHtml((string)($row['method_code'] ?? '')) ?></div></td>
+                            <td class="num"><?= (int)($row['orders_count'] ?? 0) ?></td>
+                            <td class="num"><?= $block->escapeHtml($block->formatMoney((float)($row['amount'] ?? 0))) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <tr class="data-row totals">
+                        <td colspan="3"><div class="data-grid-cell-content"><?= $block->escapeHtml(__('Total')) ?></div></td>
+                        <td class="num"><?= $block->escapeHtml($block->formatMoney($paymentsTotal)) ?></td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <h2><?= $block->escapeHtml(__('Cash Reconciliation')) ?></h2>
+    <div class="panth-pos-recon-wrap">
+        <table class="admin__table-secondary">
+            <tbody>
+                <tr>
+                    <th><?= $block->escapeHtml(__('Opening Float')) ?></th>
+                    <td class="num"><?= $block->escapeHtml($block->formatMoney($cash['opening_float'])) ?></td>
+                </tr>
+                <tr>
+                    <th><?= $block->escapeHtml(__('Cash Sales')) ?></th>
+                    <td class="num"><?= $block->escapeHtml($block->formatMoney($cash['sales'])) ?></td>
+                </tr>
+                <tr>
+                    <th><?= $block->escapeHtml(__('Cash Refunds')) ?></th>
+                    <td class="num"><?= $block->escapeHtml($block->formatMoney($cash['refunds'])) ?></td>
+                </tr>
+                <tr>
+                    <th><?= $block->escapeHtml(__('Cash In')) ?></th>
+                    <td class="num"><?= $block->escapeHtml($block->formatMoney($cash['in'])) ?></td>
+                </tr>
+                <tr>
+                    <th><?= $block->escapeHtml(__('Cash Out')) ?></th>
+                    <td class="num"><?= $block->escapeHtml($block->formatMoney($cash['out'])) ?></td>
+                </tr>
+                <tr>
+                    <th><strong><?= $block->escapeHtml(__('Expected Cash')) ?></strong></th>
+                    <td class="num"><strong><?= $block->escapeHtml($block->formatMoney($cash['expected'])) ?></strong></td>
+                </tr>
+                <tr>
+                    <th><strong><?= $block->escapeHtml(__('Counted Cash')) ?></strong></th>
+                    <td class="num"><strong><?= $block->escapeHtml($block->formatMoney($cash['counted'])) ?></strong></td>
+                </tr>
+                <tr>
+                    <th><strong><?= $block->escapeHtml(__('Over / Short')) ?></strong></th>
+                    <td class="num">
+                        <?php if ($cash['over_short'] === null): ?>
+                            -
+                        <?php else: ?>
+                            <strong class="panth-pos-amount <?= (float)$cash['over_short'] < 0 ? 'negative' : 'positive' ?>">
+                                <?= $block->escapeHtml($block->formatMoney($cash['over_short'])) ?>
+                            </strong>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2><?= $block->escapeHtml(__('Cash Drawer Movements')) ?></h2>
+    <?= /* @noEscape */ $block->getMovementsPagerHtml() ?>
+    <div class="admin__data-grid-wrap admin__data-grid-wrap-static">
+        <table class="data-grid data-grid-draggable">
+            <thead>
+                <tr>
+                    <th class="data-grid-th"><span><?= $block->escapeHtml(__('ID')) ?></span></th>
+                    <th class="data-grid-th"><span><?= $block->escapeHtml(__('Time')) ?></span></th>
+                    <th class="data-grid-th"><span><?= $block->escapeHtml(__('Type')) ?></span></th>
+                    <th class="data-grid-th num"><span><?= $block->escapeHtml(__('Amount')) ?></span></th>
+                    <th class="data-grid-th"><span><?= $block->escapeHtml(__('Reason')) ?></span></th>
+                    <th class="data-grid-th"><span><?= $block->escapeHtml(__('User')) ?></span></th>
+                    <th class="data-grid-th num"><span><?= $block->escapeHtml(__('Order ID')) ?></span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($movements)): ?>
+                    <tr class="data-grid-tr-no-data">
+                        <td colspan="7"><?= $block->escapeHtml(__('No cash movements were recorded in this session.')) ?></td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($movements as $movement): ?>
+                        <?php $amount = (float)$movement->getAmount(); ?>
+                        <tr class="data-row">
+                            <td><div class="data-grid-cell-content"><?= (int)$movement->getMovementId() ?></div></td>
+                            <td>
+                                <div class="data-grid-cell-content">
+                                    <?= $block->escapeHtml(
+                                        $movement->getCreatedAt()
+                                            ? $block->formatDate($movement->getCreatedAt(), \IntlDateFormatter::MEDIUM, true)
+                                            : '-'
+                                    ) ?>
+                                </div>
+                            </td>
+                            <td><div class="data-grid-cell-content"><?= $block->escapeHtml((string)($typeLabels[$movement->getType()] ?? $movement->getType())) ?></div></td>
+                            <td class="num">
+                                <span class="panth-pos-amount <?= $amount < 0 ? 'negative' : 'positive' ?>">
+                                    <?= $block->escapeHtml($block->formatMoney($amount)) ?>
+                                </span>
+                            </td>
+                            <td><div class="data-grid-cell-content"><?= $block->escapeHtml($movement->getReason() ?? '') ?></div></td>
+                            <td><div class="data-grid-cell-content"><?= $block->escapeHtml($block->resolveUserName((int)$movement->getUserId()) ?? '-') ?></div></td>
+                            <td class="num">
+                                <?php if ($movement->getOrderId() !== null): ?>
+                                    <a href="<?= $block->escapeUrl($block->getOrderViewUrl((int)$movement->getOrderId())) ?>">
+                                        <?= (int)$movement->getOrderId() ?>
+                                    </a>
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    <?= /* @noEscape */ $block->getMovementsPagerHtml() ?>
+<?php endif; ?>
+</div>

@@ -1,0 +1,248 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS terminal - checkout modal: split payment rows (method buttons with
+ * icons), amount keypad, cash quick tender (exact / next-5 / next-10 +
+ * denominations), reference inputs, live remaining / change due, place
+ * order, then the in-modal receipt view (print / email opt-in / new sale;
+ * online methods render a QR + link).
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<div class="pos-checkout"
+     id="pos-modal-checkout"
+     x-data="posCheckout()"
+     x-show="open"
+     @keydown.window="padKey($event)"
+     x-cloak>
+    <div class="pos-checkout__box" role="dialog" aria-modal="true">
+
+        <!-- ============================ PAY VIEW ============================ -->
+        <template x-if="view === 'pay'">
+            <div class="pos-checkout__pay">
+                <header class="pos-checkout__header">
+                    <span class="pos-checkout__title"><?= $escaper->escapeHtml(__('Payment')) ?></span>
+                    <span class="pos-checkout__due">
+                        <span class="pos-checkout__due-label"><?= $escaper->escapeHtml(__('Total')) ?></span>
+                        <span class="pos-checkout__due-value pos-amount" x-text="money(total())"></span>
+                    </span>
+                    <button type="button"
+                            class="pos-checkout__close"
+                            @click="close()"
+                            :disabled="placing"
+                            aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                        <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg>
+                    </button>
+                </header>
+
+                <div class="pos-checkout__live">
+                    <span class="pos-checkout__live-item"
+                          :class="{ 'pos-checkout__live-item--warn': remaining() > 0 }">
+                        <small><?= $escaper->escapeHtml(__('Remaining')) ?></small>
+                        <strong class="pos-amount" x-text="money(remaining())"></strong>
+                    </span>
+                    <?php /* Item 38: change is a cash concept - displayChange()
+                       only reports overpay that cash rows actually cover, so a
+                       purely-online overpay never reads as "Change due". */ ?>
+                    <span class="pos-checkout__live-item pos-checkout__live-item--ok" x-show="displayChange() > 0">
+                        <small><?= $escaper->escapeHtml(__('Change due')) ?></small>
+                        <strong class="pos-amount" x-text="money(displayChange())"></strong>
+                    </span>
+                </div>
+
+                <div class="pos-checkout__columns">
+                    <div class="pos-checkout__left">
+                        <!-- Method buttons -->
+                        <div class="pos-checkout__methods">
+                            <template x-for="m in methods()" :key="m.code">
+                                <button type="button" class="pos-method" @click="addRow(m)">
+                                    <span class="pos-method__icon" aria-hidden="true">
+                                        <template x-if="iconText(m)"><span x-text="iconText(m)"></span></template>
+                                        <template x-if="!iconText(m)">
+                                            <svg class="pos-icon" aria-hidden="true" focusable="false"><use :href="iconId(m)"/></svg>
+                                        </template>
+                                    </span>
+                                    <span class="pos-method__title" x-text="m.title"></span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Payment rows -->
+                        <div class="pos-checkout__rows">
+                            <template x-for="(row, i) in rows" :key="i">
+                                <div class="pos-payrow"
+                                     :class="{ 'pos-payrow--active': i === activeRow }"
+                                     @click="selectRow(i)">
+                                    <div class="pos-payrow__top">
+                                        <span class="pos-payrow__method">
+                                            <template x-if="iconText(row)"><span x-text="iconText(row)" aria-hidden="true"></span></template>
+                                            <template x-if="!iconText(row)">
+                                                <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use :href="iconId(row)"/></svg>
+                                            </template>
+                                            <span x-text="row.title"></span>
+                                        </span>
+                                        <span class="pos-payrow__amount pos-amount" x-text="money(Number(row.amount) || 0)"></span>
+                                        <button type="button"
+                                                class="pos-payrow__remove"
+                                                style="min-width: 48px; min-height: 48px;"
+                                                @click.stop="removeRow(i)"
+                                                aria-label="<?= $escaper->escapeHtmlAttr(__('Remove payment')) ?>">
+                                            <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-x"/></svg>
+                                        </button>
+                                    </div>
+                                    <input type="text"
+                                           class="pos-input pos-payrow__reference"
+                                           x-show="row.requires_reference"
+                                           x-model="row.reference"
+                                           @click.stop
+                                           placeholder="<?= $escaper->escapeHtmlAttr(__('Reference / approval #...')) ?>">
+                                    <p class="pos-payrow__instructions" x-show="row.instructions" x-text="row.instructions"></p>
+                                    <!-- Cash quick tender on the active cash row -->
+                                    <div class="pos-payrow__tender" x-show="row.type === 'cash' && i === activeRow" @click.stop>
+                                        <button type="button" class="pos-tender pos-tender--exact" @click="tenderExact()"><?= $escaper->escapeHtml(__('Exact')) ?></button>
+                                        <button type="button" class="pos-tender" @click="tenderNext(5)">+5</button>
+                                        <button type="button" class="pos-tender" @click="tenderNext(10)">+10</button>
+                                        <template x-for="d in denominations" :key="d">
+                                            <button type="button" class="pos-tender pos-tender--denom" @click="tenderDenomination(d)" x-text="d"></button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                            <p class="pos-checkout__rows-empty" x-show="rows.length === 0">
+                                <?= $escaper->escapeHtml(__('Tap a payment method to add it.')) ?>
+                            </p>
+                        </div>
+
+                        <!-- Email receipt opt-in (used by place - pinned email_receipt/receipt_email) -->
+                        <label class="pos-checkout__email pos-switch">
+                            <input type="checkbox" x-model="emailReceipt">
+                            <span class="pos-switch__track" aria-hidden="true"></span>
+                            <span class="pos-switch__label"><?= $escaper->escapeHtml(__('Email receipt')) ?></span>
+                            <input type="email"
+                                   class="pos-input"
+                                   x-show="emailReceipt"
+                                   x-model="receiptEmail"
+                                   @click.prevent.stop=""
+                                   placeholder="<?= $escaper->escapeHtmlAttr(__('customer@example.com')) ?>">
+                        </label>
+                    </div>
+
+                    <!-- Amount keypad -->
+                    <div class="pos-checkout__right">
+                        <div class="pos-keypad pos-checkout__keypad">
+                            <template x-for="k in ['1','2','3','4','5','6','7','8','9','C','0','.']" :key="k">
+                                <button type="button"
+                                        class="pos-keypad__key"
+                                        :class="{ 'pos-keypad__key--fn': k === 'C' }"
+                                        @click="keyTap(k)"
+                                        x-text="k"></button>
+                            </template>
+                            <button type="button" class="pos-keypad__key pos-keypad__key--fn pos-keypad__key--wide" @click="keyTap('back')">&#9003;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="pos-checkout__footer">
+                    <button type="button" class="pos-btn pos-btn--ghost" @click="close()" :disabled="placing">
+                        <?= $escaper->escapeHtml(__('Cancel')) ?>
+                    </button>
+                    <button type="button"
+                            class="pos-checkout__place"
+                            :disabled="!canPlace()"
+                            @click="place()">
+                        <span x-show="!placing"><?= $escaper->escapeHtml(__('PLACE ORDER')) ?></span>
+                        <span x-show="placing"><?= $escaper->escapeHtml(__('Placing...')) ?></span>
+                        <span class="pos-checkout__place-sub"
+                              x-show="!placing && !canPlace() && blockReason()"
+                              x-text="blockReason()"></span>
+                        <span class="pos-checkout__place-sub pos-amount"
+                              x-show="!placing && canPlace() && displayChange() > 0"
+                              x-text="'<?= $escaper->escapeJs(__('Change')) ?> ' + money(displayChange())"></span>
+                    </button>
+                </footer>
+            </div>
+        </template>
+
+        <!-- =========================== DONE VIEW =========================== -->
+        <template x-if="view === 'done'">
+            <div class="pos-checkout__done">
+                <div class="pos-checkout__done-head">
+                    <span class="pos-checkout__check" aria-hidden="true">
+                        <svg class="pos-icon pos-icon--lg" aria-hidden="true" focusable="false"><use href="#pi-check"/></svg>
+                    </span>
+                    <h2><?= $escaper->escapeHtml(__('Sale complete')) ?></h2>
+                    <p class="pos-checkout__done-meta">
+                        <span x-text="result ? ('<?= $escaper->escapeJs(__('Order')) ?> #' + (result.increment_id || '')) : ''"></span>
+                        <span x-text="result && result.receipt_number ? ('<?= $escaper->escapeJs(__('Receipt')) ?> ' + result.receipt_number) : ''"></span>
+                    </p>
+                </div>
+
+                <?php /* Item 49: change is a cash concept - doneChangeDue()
+                   only surfaces the server change_due when cash was actually
+                   tendered, so an online-only (pending payment-link) sale
+                   never shows a "CHANGE DUE" block beside its Pending amount. */ ?>
+                <div class="pos-checkout__change" x-show="doneChangeDue() > 0">
+                    <small><?= $escaper->escapeHtml(__('CHANGE DUE')) ?></small>
+                    <strong class="pos-amount" x-text="money(doneChangeDue())"></strong>
+                </div>
+
+                <!-- Online payment rows (item 38): scannable QR + selectable link
+                     when the method has a payment URL; the method's instructions
+                     (or an Admin hint) when it has none - never an empty box. -->
+                <div class="pos-checkout__online" x-show="onlineRows().length > 0">
+                    <template x-for="(orow, i) in onlineRows()" :key="i">
+                        <div class="pos-checkout__online-row">
+                            <p class="pos-checkout__online-title" x-text="onlineTitle(orow)"></p>
+                            <p class="pos-checkout__online-amount" x-show="onlineAmount(orow) > 0">
+                                <small><?= $escaper->escapeHtml(__('Pending')) ?></small>
+                                <strong class="pos-amount" x-text="money(onlineAmount(orow))"></strong>
+                            </p>
+                            <template x-if="onlineUrl(orow)">
+                                <div class="pos-checkout__online-scan">
+                                    <p class="pos-checkout__online-hint"><?= $escaper->escapeHtml(__('Let the customer scan to pay')) ?></p>
+                                    <div class="pos-checkout__qr" :data-pos-qr="i"></div>
+                                    <a class="pos-checkout__online-link"
+                                       :href="onlineUrl(orow)"
+                                       target="_blank"
+                                       rel="noopener"
+                                       x-text="onlineUrl(orow)"></a>
+                                </div>
+                            </template>
+                            <template x-if="!onlineUrl(orow)">
+                                <p class="pos-checkout__online-instructions"
+                                   x-text="onlineInstructions(orow)
+                                       || '<?= $escaper->escapeJs(__('No payment link is configured for this method - take the payment in your payment app, or set a Payment URL template in Admin > Sales > POS > Payment Methods.')) ?>'"></p>
+                            </template>
+                            <p class="pos-checkout__online-pending"><?= $escaper->escapeHtml(__('Order stays in Pending Payment until confirmed.')) ?></p>
+                        </div>
+                    </template>
+                </div>
+
+                <p class="pos-checkout__emailed" x-show="emailReceipt && receiptEmail">
+                    <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-mail"/></svg>
+                    <span x-text="'<?= $escaper->escapeJs(__('Receipt emailed to')) ?> ' + receiptEmail"></span>
+                </p>
+
+                <div class="pos-checkout__done-actions">
+                    <button type="button"
+                            class="pos-btn pos-checkout__done-btn"
+                            @click="$dispatch('pos:receipt-open'); close()">
+                        <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-receipt"/></svg>
+                        <?= $escaper->escapeHtml(__('View receipt')) ?>
+                    </button>
+                    <button type="button" class="pos-btn pos-btn--ghost pos-checkout__done-btn" @click="printReceipt()">
+                        <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-printer"/></svg>
+                        <?= $escaper->escapeHtml(__('Print receipt')) ?>
+                    </button>
+                    <button type="button" class="pos-checkout__newsale" @click="newSale()">
+                        <?= $escaper->escapeHtml(__('NEW SALE')) ?>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+<?php /* Styles for .pos-checkout__* live in view/frontend/web/css/pos.css §18b. */ ?>

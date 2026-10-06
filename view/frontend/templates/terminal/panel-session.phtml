@@ -1,0 +1,404 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal panel: register session (spec §9) - session status chip (pulsing
+ * when open), KPI chips (opening float, live expected cash with refresh,
+ * cash in/out totals), tactile action row (cash in, cash out, X report,
+ * close session), inline cash-movement keypad form, X report rendered as
+ * stat blocks with a scrolling movements mini-list, and the close-session
+ * flow with counted-cash keypad and over/short result. State lives in
+ * Alpine.store('posRegister') (web/js/pos/register.js), shared with
+ * modal-session.phtml (open flow).
+ */
+declare(strict_types=1);
+
+/** @var \Panth\MagePos\Block\Terminal $block */
+/** @var \Magento\Framework\Escaper $escaper */
+
+$keypadKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back'];
+?>
+<section class="pos-panel pos-panel--session"
+         id="pos-panel-session"
+         data-panel="session"
+         @keydown.window="$store.posRegister.panelKey($event, $el)"
+         x-data="{
+             movementMeta: {
+                 'float': { icon: 'pi-cash', label: '<?= $escaper->escapeJs(__('Opening float')) ?>' },
+                 'sale': { icon: 'pi-receipt', label: '<?= $escaper->escapeJs(__('Sale')) ?>' },
+                 'refund': { icon: 'pi-restore', label: '<?= $escaper->escapeJs(__('Refund')) ?>' },
+                 'in': { icon: 'pi-cash-in', label: '<?= $escaper->escapeJs(__('Cash in')) ?>' },
+                 'out': { icon: 'pi-cash-out', label: '<?= $escaper->escapeJs(__('Cash out')) ?>' },
+                 'close': { icon: 'pi-lock', label: '<?= $escaper->escapeJs(__('Close count')) ?>' }
+             },
+             movementIcon(type) { return (this.movementMeta[type] || {}).icon || 'pi-cash'; },
+             movementLabel(type) { return (this.movementMeta[type] || {}).label || type; }
+         }"
+         x-cloak>
+    <header class="pos-panel__header" data-drag-handle>
+        <span class="pos-panel__drag" aria-hidden="true"></span>
+        <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Register')) ?></span>
+        <span class="pos-chip pos-chip--open"
+              x-show="$store.posRegister.session"
+              style="display:none; color: color-mix(in srgb, var(--pos-success) 58%, var(--pos-text));"><?= $escaper->escapeHtml(__('Open')) ?></span>
+        <span class="pos-chip pos-chip--closed"
+              x-show="!$store.posRegister.session"><?= $escaper->escapeHtml(__('Closed')) ?></span>
+        <div class="pos-panel__actions">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost pos-btn--icon"
+                    :disabled="$store.posRegister.loading"
+                    @click="$store.posRegister.refresh()"
+                    title="<?= $escaper->escapeHtmlAttr(__('Refresh session')) ?>"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Refresh session')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-restore"/></svg>
+            </button>
+            <!-- Floating-panel close affordance (UI-fix contract §13a) -->
+            <button type="button"
+                    class="pos-btn pos-btn--ghost pos-btn--icon pos-panel__close"
+                    @click="window.PosLayout && window.PosLayout.closePanel('session')"
+                    title="<?= $escaper->escapeHtmlAttr(__('Close')) ?>"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+    </header>
+    <div class="pos-panel__body">
+
+        <!-- 1. Z-report result (after close) -->
+        <template x-if="$store.posRegister.closeResult">
+            <div>
+                <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Session Closed - Z Report')) ?></h3>
+                <div class="pos-row pos-row--stack">
+                    <div class="pos-kpi">
+                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Orders')) ?></span>
+                        <span class="pos-kpi__value pos-amount" x-text="$store.posRegister.closeResult.orders_count"></span>
+                    </div>
+                    <div class="pos-kpi">
+                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Gross Sales')) ?></span>
+                        <span class="pos-kpi__value pos-amount" x-text="$store.posRegister.money($store.posRegister.closeResult.gross)"></span>
+                    </div>
+                </div>
+                <dl class="pos-kv">
+                    <dt><?= $escaper->escapeHtml(__('Expected cash')) ?></dt>
+                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.closeResult.cash.expected)"></span></dd>
+                    <dt><?= $escaper->escapeHtml(__('Counted cash')) ?></dt>
+                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.closeResult.cash.counted)"></span></dd>
+                    <dt><?= $escaper->escapeHtml(__('Over / Short')) ?></dt>
+                    <dd>
+                        <span class="pos-amount"
+                              :class="$store.posRegister.overShort() < 0 ? 'pos-amount--negative' : 'pos-amount--positive'"
+                              x-text="$store.posRegister.money($store.posRegister.overShort())"></span>
+                    </dd>
+                </dl>
+                <p class="pos-text-success"
+                   x-show="Math.abs($store.posRegister.overShort()) < 0.005"
+                   style="display:none">
+                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-check"/></svg>
+                    <?= $escaper->escapeHtml(__('Drawer balanced - no over/short.')) ?>
+                </p>
+                <hr class="pos-divider">
+                <button type="button"
+                        class="pos-btn pos-btn--primary pos-btn--block"
+                        @click="$store.posRegister.finishClose()">
+                    <?= $escaper->escapeHtml(__('Done')) ?>
+                </button>
+            </div>
+        </template>
+
+        <!-- 2. No open session -->
+        <template x-if="!$store.posRegister.closeResult && !$store.posRegister.session">
+            <div>
+                <div class="pos-empty">
+                    <span class="pos-empty__icon" aria-hidden="true">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-lock"/></svg>
+                    </span>
+                    <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No register session is open.')) ?></span>
+                    <span class="pos-empty__text"
+                          x-show="!$store.posRegister.can('can_open_close')"><?= $escaper->escapeHtml(__('Ask a manager to open the register.')) ?></span>
+                </div>
+                <button type="button"
+                        class="pos-btn pos-btn--primary pos-btn--lg pos-btn--block"
+                        x-show="$store.posRegister.can('can_open_close')"
+                        @click="$store.posRegister.openModal()">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-cash"/></svg>
+                    <?= $escaper->escapeHtml(__('Open Register')) ?>
+                </button>
+            </div>
+        </template>
+
+        <!-- 3. Open session -->
+        <template x-if="!$store.posRegister.closeResult && $store.posRegister.session && !$store.posRegister.closing">
+            <div>
+                <!-- KPI chips: opening float, live expected cash (+refresh), cash in/out -->
+                <div class="pos-row">
+                    <div class="pos-kpi">
+                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Opening Float')) ?></span>
+                        <span class="pos-kpi__value pos-amount" x-text="$store.posRegister.money($store.posRegister.session.opening_float)"></span>
+                    </div>
+                    <div class="pos-kpi">
+                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Expected Cash')) ?></span>
+                        <span class="pos-kpi__value pos-amount" x-text="$store.posRegister.money($store.posRegister.expectedCash)"></span>
+                    </div>
+                    <button type="button"
+                            class="pos-btn pos-btn--ghost"
+                            :disabled="$store.posRegister.loading"
+                            @click="$store.posRegister.refresh()"
+                            title="<?= $escaper->escapeHtmlAttr(__('Refresh expected cash')) ?>"
+                            aria-label="<?= $escaper->escapeHtmlAttr(__('Refresh expected cash')) ?>">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-restore"/></svg>
+                    </button>
+                    <div class="pos-kpi" title="<?= $escaper->escapeHtmlAttr(__('Open the X Report to update')) ?>">
+                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Cash In')) ?></span>
+                        <span class="pos-kpi__value pos-amount"
+                              x-text="$store.posRegister.xreport ? $store.posRegister.money($store.posRegister.xreport.cash.in) : '-'"></span>
+                    </div>
+                    <div class="pos-kpi" title="<?= $escaper->escapeHtmlAttr(__('Open the X Report to update')) ?>">
+                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Cash Out')) ?></span>
+                        <span class="pos-kpi__value pos-amount"
+                              x-text="$store.posRegister.xreport ? $store.posRegister.money($store.posRegister.xreport.cash.out) : '-'"></span>
+                    </div>
+                </div>
+
+                <!-- Session meta -->
+                <dl class="pos-kv">
+                    <dt><?= $escaper->escapeHtml(__('Register')) ?></dt>
+                    <dd x-text="$store.posRegister.session.register_name"></dd>
+                    <dt><?= $escaper->escapeHtml(__('Cashier')) ?></dt>
+                    <dd x-text="$store.posRegister.session.user_name"></dd>
+                    <dt><?= $escaper->escapeHtml(__('Opened at')) ?></dt>
+                    <dd x-text="$store.posRegister.session.opened_at"></dd>
+                </dl>
+
+                <!-- Action row -->
+                <div class="pos-denominations">
+                    <button type="button"
+                            class="pos-btn"
+                            x-show="$store.posRegister.can('can_cash_inout')"
+                            @click="$store.posRegister.startMovement('in')">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-cash-in"/></svg>
+                        <?= $escaper->escapeHtml(__('Cash In')) ?>
+                    </button>
+                    <button type="button"
+                            class="pos-btn"
+                            x-show="$store.posRegister.can('can_cash_inout')"
+                            @click="$store.posRegister.startMovement('out')">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-cash-out"/></svg>
+                        <?= $escaper->escapeHtml(__('Cash Out')) ?>
+                    </button>
+                    <button type="button"
+                            class="pos-btn"
+                            :class="{'pos-btn--active': $store.posRegister.xreportOpen}"
+                            :disabled="$store.posRegister.xreportLoading"
+                            x-show="$store.posRegister.can('can_view_reports')"
+                            @click="$store.posRegister.toggleXreport()">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-report"/></svg>
+                        <?= $escaper->escapeHtml(__('X Report')) ?>
+                    </button>
+                    <button type="button"
+                            class="pos-btn pos-btn--danger"
+                            style="color: color-mix(in srgb, var(--pos-danger) 68%, var(--pos-text));"
+                            x-show="$store.posRegister.can('can_open_close')"
+                            @click="$store.posRegister.startClose()">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-lock"/></svg>
+                        <?= $escaper->escapeHtml(__('Close Session')) ?>
+                    </button>
+                </div>
+
+                <!-- Cash in/out inline form -->
+                <div x-show="$store.posRegister.movementType" style="display:none">
+                    <hr class="pos-divider">
+                    <h3 class="pos-section-title">
+                        <span x-show="$store.posRegister.movementType === 'in'">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-cash-in"/></svg>
+                            <?= $escaper->escapeHtml(__('Cash In')) ?>
+                        </span>
+                        <span x-show="$store.posRegister.movementType === 'out'" style="display:none">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-cash-out"/></svg>
+                            <?= $escaper->escapeHtml(__('Cash Out')) ?>
+                        </span>
+                    </h3>
+                    <div class="pos-keypad__display pos-amount" x-text="$store.posRegister.money($store.posRegister.bufferAmount('movement'))"></div>
+                    <div class="pos-keypad">
+                        <?php foreach ($keypadKeys as $key): ?>
+                            <button type="button"
+                                    class="pos-keypad__key<?= $key === 'back' ? ' pos-keypad__key--action' : '' ?>"
+                                    <?= $key === 'back' ? 'aria-label="' . $escaper->escapeHtmlAttr(__('Backspace')) . '"' : '' ?>
+                                    @click="$store.posRegister.keypad('movement', '<?= $escaper->escapeJs($key) ?>')">
+                                <?= $key === 'back' ? '&#9003;' : $escaper->escapeHtml($key) ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <label class="pos-field">
+                        <span class="pos-field__label"><?= $escaper->escapeHtml(__('Reason')) ?></span>
+                        <input type="text"
+                               class="pos-input"
+                               placeholder="<?= $escaper->escapeHtmlAttr(__('Reason')) ?>"
+                               x-model="$store.posRegister.movementReason">
+                    </label>
+                    <hr class="pos-divider">
+                    <div class="pos-denominations">
+                        <button type="button"
+                                class="pos-btn pos-btn--primary"
+                                :disabled="$store.posRegister.movementBusy"
+                                @click="$store.posRegister.confirmMovement()">
+                            <svg class="pos-icon" aria-hidden="true"><use href="#pi-check"/></svg>
+                            <?= $escaper->escapeHtml(__('Confirm')) ?>
+                        </button>
+                        <button type="button"
+                                class="pos-btn pos-btn--ghost"
+                                @click="$store.posRegister.cancelMovement()">
+                            <?= $escaper->escapeHtml(__('Cancel')) ?>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- X report inline view: stat blocks + movements mini-list.
+                     UI-fix contract §12: a flex column bounded to the viewport
+                     where the KPI + BY PAYMENT METHOD + cash-drawer blocks are
+                     PINNED above the scroll region, the movements list is the
+                     ONLY scrolling region (.pos-scroll -> own overflow-y:auto +
+                     min-height:0), and the "Generated at" caption is a PINNED
+                     footer below the scroll region so it can never overlap the
+                     last movement row. -->
+                <div x-show="$store.posRegister.xreportOpen && $store.posRegister.xreport" style="display:none">
+                    <hr class="pos-divider">
+                    <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('X Report')) ?></h3>
+                    <template x-if="$store.posRegister.xreport">
+                        <div class="pos-session">
+                            <!-- Pinned: KPIs + BY PAYMENT METHOD + cash drawer -->
+                            <div class="pos-session__pinned">
+                                <div class="pos-row">
+                                    <div class="pos-kpi">
+                                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Orders')) ?></span>
+                                        <span class="pos-kpi__value pos-amount" x-text="$store.posRegister.xreport.orders_count"></span>
+                                    </div>
+                                    <div class="pos-kpi">
+                                        <span class="pos-kpi__label"><?= $escaper->escapeHtml(__('Gross Sales')) ?></span>
+                                        <span class="pos-kpi__value pos-amount" x-text="$store.posRegister.money($store.posRegister.xreport.gross)"></span>
+                                    </div>
+                                </div>
+
+                                <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('By payment method')) ?></h3>
+                                <p class="pos-muted"
+                                   x-show="!($store.posRegister.xreport.by_payment_method || []).length"><?= $escaper->escapeHtml(__('No payments recorded yet.')) ?></p>
+                                <ul class="pos-list" x-show="($store.posRegister.xreport.by_payment_method || []).length" style="display:none">
+                                    <template x-for="row in $store.posRegister.xreport.by_payment_method" :key="row.method_code">
+                                        <li class="pos-list__item">
+                                            <span class="pos-list__item-info">
+                                                <strong x-text="row.method_title"></strong>
+                                            </span>
+                                            <span class="pos-list__item-meta">
+                                                <span class="pos-amount" x-text="$store.posRegister.money(row.amount)"></span>
+                                            </span>
+                                        </li>
+                                    </template>
+                                </ul>
+
+                                <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Cash drawer')) ?></h3>
+                                <dl class="pos-kv">
+                                    <dt><?= $escaper->escapeHtml(__('Opening float')) ?></dt>
+                                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.xreport.cash.opening_float)"></span></dd>
+                                    <dt><?= $escaper->escapeHtml(__('Cash sales')) ?></dt>
+                                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.xreport.cash.sales)"></span></dd>
+                                    <dt><?= $escaper->escapeHtml(__('Cash refunds')) ?></dt>
+                                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.xreport.cash.refunds)"></span></dd>
+                                    <dt><?= $escaper->escapeHtml(__('Cash in')) ?></dt>
+                                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.xreport.cash.in)"></span></dd>
+                                    <dt><?= $escaper->escapeHtml(__('Cash out')) ?></dt>
+                                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.xreport.cash.out)"></span></dd>
+                                    <dt><?= $escaper->escapeHtml(__('Expected in drawer')) ?></dt>
+                                    <dd><span class="pos-amount pos-amount--positive" x-text="$store.posRegister.money($store.posRegister.xreport.cash.expected)"></span></dd>
+                                </dl>
+
+                                <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Movements')) ?></h3>
+                                <p class="pos-muted"
+                                   x-show="!($store.posRegister.xreport.movements || []).length"><?= $escaper->escapeHtml(__('No cash movements yet.')) ?></p>
+                            </div>
+
+                            <!-- Scroll region: ONLY the movements list scrolls -->
+                            <div class="pos-session__scroll"
+                                 x-show="($store.posRegister.xreport.movements || []).length">
+                                <ul class="pos-list">
+                                    <template x-for="movement in $store.posRegister.xreport.movements" :key="movement.movement_id">
+                                        <li class="pos-list__item">
+                                            <svg class="pos-icon" aria-hidden="true"><use :href="'#' + movementIcon(movement.type)"/></svg>
+                                            <span class="pos-list__item-info">
+                                                <strong x-text="movementLabel(movement.type)"></strong>
+                                                <span class="pos-muted" x-show="movement.reason" x-text="movement.reason"></span>
+                                            </span>
+                                            <span class="pos-list__item-meta">
+                                                <span class="pos-amount"
+                                                      :class="movement.amount < 0 ? 'pos-amount--negative' : 'pos-amount--positive'"
+                                                      x-text="$store.posRegister.money(movement.amount)"></span>
+                                                <span class="pos-muted" x-text="movement.created_at"></span>
+                                            </span>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+
+                            <!-- Pinned footer: generated-at caption (never overlaps rows) -->
+                            <p class="pos-session__footer">
+                                <?= $escaper->escapeHtml(__('Generated at')) ?>
+                                <span x-text="$store.posRegister.xreport.generated_at"></span>
+                            </p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- 4. Close flow: counted-cash keypad -->
+        <template x-if="!$store.posRegister.closeResult && $store.posRegister.session && $store.posRegister.closing">
+            <div>
+                <h3 class="pos-section-title"><?= $escaper->escapeHtml(__('Close Session - Count the Drawer')) ?></h3>
+                <dl class="pos-kv">
+                    <dt><?= $escaper->escapeHtml(__('Expected cash')) ?></dt>
+                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.expectedCash)"></span></dd>
+                    <dt><?= $escaper->escapeHtml(__('Counted cash')) ?></dt>
+                    <dd><span class="pos-amount" x-text="$store.posRegister.money($store.posRegister.bufferAmount('counted'))"></span></dd>
+                    <dt><?= $escaper->escapeHtml(__('Over / Short')) ?></dt>
+                    <dd>
+                        <span class="pos-amount"
+                              :class="($store.posRegister.bufferAmount('counted') - ($store.posRegister.expectedCash || 0)) < 0 ? 'pos-amount--negative' : 'pos-amount--positive'"
+                              x-text="$store.posRegister.money($store.posRegister.bufferAmount('counted') - ($store.posRegister.expectedCash || 0))"></span>
+                    </dd>
+                </dl>
+                <div class="pos-keypad__display pos-amount" x-text="$store.posRegister.money($store.posRegister.bufferAmount('counted'))"></div>
+                <div class="pos-keypad">
+                    <?php foreach ($keypadKeys as $key): ?>
+                        <button type="button"
+                                class="pos-keypad__key<?= $key === 'back' ? ' pos-keypad__key--action' : '' ?>"
+                                <?= $key === 'back' ? 'aria-label="' . $escaper->escapeHtmlAttr(__('Backspace')) . '"' : '' ?>
+                                @click="$store.posRegister.keypad('counted', '<?= $escaper->escapeJs($key) ?>')">
+                            <?= $key === 'back' ? '&#9003;' : $escaper->escapeHtml($key) ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+                <label class="pos-field">
+                    <span class="pos-field__label"><?= $escaper->escapeHtml(__('Closing note (optional)')) ?></span>
+                    <input type="text"
+                           class="pos-input"
+                           placeholder="<?= $escaper->escapeHtmlAttr(__('Closing note (optional)')) ?>"
+                           x-model="$store.posRegister.closeNote">
+                </label>
+                <hr class="pos-divider">
+                <div class="pos-denominations">
+                    <button type="button"
+                            class="pos-btn pos-btn--danger-solid"
+                            :disabled="$store.posRegister.closeBusy"
+                            @click="$store.posRegister.confirmClose()">
+                        <svg class="pos-icon" aria-hidden="true"><use href="#pi-lock"/></svg>
+                        <?= $escaper->escapeHtml(__('Confirm Close')) ?>
+                    </button>
+                    <button type="button"
+                            class="pos-btn pos-btn--ghost"
+                            :disabled="$store.posRegister.closeBusy"
+                            @click="$store.posRegister.cancelClose()">
+                        <?= $escaper->escapeHtml(__('Cancel')) ?>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+</section>

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Admin POS session grid. Data source panth_pos_session_listing_data_source
+ * is backed by Panth\MagePos\Model\ResourceModel\Session\Grid\Collection
+ * (registered in etc/di.xml), which joins register_name and cashier_name.
+ */
+-->
+<listing xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Ui:etc/ui_configuration.xsd">
+    <argument name="data" xsi:type="array">
+        <item name="js_config" xsi:type="array">
+            <item name="provider" xsi:type="string">panth_pos_session_listing.panth_pos_session_listing_data_source</item>
+        </item>
+    </argument>
+    <settings>
+        <spinner>panth_pos_session_columns</spinner>
+        <deps>
+            <dep>panth_pos_session_listing.panth_pos_session_listing_data_source</dep>
+        </deps>
+    </settings>
+    <dataSource name="panth_pos_session_listing_data_source" component="Magento_Ui/js/grid/provider">
+        <settings>
+            <storageConfig>
+                <param name="indexField" xsi:type="string">session_id</param>
+            </storageConfig>
+            <updateUrl path="mui/index/render"/>
+        </settings>
+        <aclResource>Panth_MagePos::sessions</aclResource>
+        <dataProvider class="Panth\MagePos\Ui\SessionGridDataProvider" name="panth_pos_session_listing_data_source">
+            <settings>
+                <requestFieldName>id</requestFieldName>
+                <primaryFieldName>session_id</primaryFieldName>
+            </settings>
+        </dataProvider>
+    </dataSource>
+    <listingToolbar name="listing_top">
+        <settings>
+            <sticky>true</sticky>
+        </settings>
+        <bookmark name="bookmarks"/>
+        <columnsControls name="columns_controls"/>
+        <filterSearch name="fulltext"/>
+        <filters name="listing_filters"/>
+        <paging name="listing_paging"/>
+    </listingToolbar>
+    <columns name="panth_pos_session_columns">
+        <column name="session_id" sortOrder="10">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">ID</label>
+                <sorting>desc</sorting>
+            </settings>
+        </column>
+        <column name="register_name" sortOrder="20">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">Register</label>
+            </settings>
+        </column>
+        <column name="cashier_name" sortOrder="30">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">Cashier</label>
+            </settings>
+        </column>
+        <column name="status" sortOrder="40" component="Magento_Ui/js/grid/columns/select">
+            <argument name="data" xsi:type="array">
+                <item name="config" xsi:type="array">
+                    <item name="options" xsi:type="array">
+                        <item name="open" xsi:type="array">
+                            <item name="value" xsi:type="string">open</item>
+                            <item name="label" xsi:type="string" translate="true">Open</item>
+                        </item>
+                        <item name="closed" xsi:type="array">
+                            <item name="value" xsi:type="string">closed</item>
+                            <item name="label" xsi:type="string" translate="true">Closed</item>
+                        </item>
+                    </item>
+                </item>
+            </argument>
+            <settings>
+                <filter>select</filter>
+                <dataType>select</dataType>
+                <label translate="true">Status</label>
+            </settings>
+        </column>
+        <column name="opening_float" class="Magento\Catalog\Ui\Component\Listing\Columns\Price" sortOrder="50">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">Opening Float</label>
+            </settings>
+        </column>
+        <column name="expected_cash" class="Magento\Catalog\Ui\Component\Listing\Columns\Price" sortOrder="60">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">Expected Cash</label>
+            </settings>
+        </column>
+        <column name="counted_cash" class="Magento\Catalog\Ui\Component\Listing\Columns\Price" sortOrder="70">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">Counted Cash</label>
+            </settings>
+        </column>
+        <column name="over_short" class="Magento\Catalog\Ui\Component\Listing\Columns\Price" sortOrder="80">
+            <settings>
+                <filter>textRange</filter>
+                <label translate="true">Over/Short</label>
+            </settings>
+        </column>
+        <column name="opened_at" sortOrder="90" class="Magento\Ui\Component\Listing\Columns\Date" component="Magento_Ui/js/grid/columns/date">
+            <settings>
+                <filter>dateRange</filter>
+                <dataType>date</dataType>
+                <label translate="true">Opened At</label>
+            </settings>
+        </column>
+        <column name="closed_at" sortOrder="100" class="Magento\Ui\Component\Listing\Columns\Date" component="Magento_Ui/js/grid/columns/date">
+            <settings>
+                <filter>dateRange</filter>
+                <dataType>date</dataType>
+                <label translate="true">Closed At</label>
+            </settings>
+        </column>
+        <actionsColumn name="actions" class="Panth\MagePos\Ui\Component\Listing\Column\SessionActions" sortOrder="1000">
+            <settings>
+                <indexField>session_id</indexField>
+            </settings>
+        </actionsColumn>
+    </columns>
+</listing>

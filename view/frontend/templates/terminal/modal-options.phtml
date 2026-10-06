@@ -1,0 +1,348 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal modal: product options (UI-fix contract item 34) - the Tactile-
+ * Console add dialog for every non-one-tap product type, backed by
+ * Alpine.store('posOptions') (catalog.js) <- GET pos/catalog/options?id=...
+ *
+ * Renders by type: configurable super-attributes as swatch/pill groups
+ * (value combos without an in-stock child are disabled), grouped associated
+ * rows with qty steppers, bundle options (select dropdown or tappable
+ * radio/checkbox choices + qty where the selection allows it) and custom
+ * options (field/area/drop_down/radio/checkbox/multiple/date/time inputs)
+ * with required markers and a running price. The Add button stays disabled
+ * until every required selection is made; the running figure is a DISPLAY
+ * estimate read from the option/child data - the server prices the real
+ * quote via the buyRequest contract and its cart payload is authoritative.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+declare(strict_types=1);
+?>
+<div class="pos-modal-backdrop"
+     data-modal="options"
+     x-data="{ get o() { return $store.posOptions; } }"
+     x-show="o.open"
+     style="display:none"
+     @click.self="o.close()"
+     @keydown.escape.window="o.open && o.close()">
+    <div class="pos-modal pos-modal--md pos-options" role="dialog" aria-modal="true"
+         aria-label="<?= $escaper->escapeHtmlAttr(__('Choose options')) ?>">
+        <div class="pos-modal__header">
+            <h2 class="pos-modal__title"
+                x-text="o.product ? o.product.name : '<?= $escaper->escapeJs(__('Choose options')) ?>'"></h2>
+            <button type="button"
+                    class="pos-modal__close"
+                    @click="o.close()"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+
+        <div class="pos-modal__body">
+            <!-- Loading -->
+            <div class="pos-empty" x-show="o.busy">
+                <span class="pos-spinner" aria-hidden="true"></span>
+                <span class="pos-empty__text"><?= $escaper->escapeHtml(__('Loading options...')) ?></span>
+            </div>
+
+            <!-- Load failure -->
+            <div class="pos-empty" x-show="!o.busy && !o.product">
+                <span class="pos-empty__icon" aria-hidden="true">
+                    <svg class="pos-icon"><use href="#pi-empty-search"/></svg>
+                </span>
+                <span class="pos-empty__text"
+                      x-text="o.error || '<?= $escaper->escapeJs(__('Could not load product options.')) ?>'"></span>
+            </div>
+
+            <template x-if="!o.busy && o.product">
+                <div>
+                    <!-- Product summary -->
+                    <div class="pos-options__summary">
+                        <template x-if="o.product.image">
+                            <img class="pos-options__thumb" :src="o.product.image" :alt="o.product.name" loading="lazy">
+                        </template>
+                        <template x-if="!o.product.image">
+                            <span class="pos-options__thumb pos-muted" aria-hidden="true">
+                                <svg class="pos-icon pos-icon--lg"><use href="#pi-tag"/></svg>
+                            </span>
+                        </template>
+                        <div class="pos-options__summary-info">
+                            <span class="pos-options__summary-name" x-text="o.product.name"></span>
+                            <span class="pos-options__summary-sku"
+                                  x-text="(o.resolvedVariant() && o.resolvedVariant().sku) || o.product.sku"></span>
+                        </div>
+                    </div>
+
+                    <!-- CONFIGURABLE: super-attribute swatch / pill groups -->
+                    <template x-for="attr in o.product.super_attributes" :key="attr.attribute_id">
+                        <div class="pos-options__group"
+                             :class="{ 'is-missing': o.superAttr[attr.attribute_id] === undefined }">
+                            <span class="pos-options__label">
+                                <span x-text="attr.label"></span>
+                                <span class="pos-options__required" aria-hidden="true">*</span>
+                            </span>
+                            <div class="pos-options__values" role="group" :aria-label="attr.label">
+                                <template x-for="opt in attr.options" :key="opt.id">
+                                    <button type="button"
+                                            :class="opt.color
+                                                ? ('pos-swatch pos-options__swatch' + (o.isAttrSelected(attr.attribute_id, opt.id) ? ' pos-swatch--active' : ''))
+                                                : ('pos-options__value' + (o.isAttrSelected(attr.attribute_id, opt.id) ? ' pos-options__value--active' : '') + (o.attrValueAvailable(attr.attribute_id, opt.id) ? '' : ' pos-options__value--disabled'))"
+                                            :style="opt.color ? ('background:' + opt.color + ';') : ''"
+                                            :disabled="!o.attrValueAvailable(attr.attribute_id, opt.id)"
+                                            :aria-pressed="o.isAttrSelected(attr.attribute_id, opt.id) ? 'true' : 'false'"
+                                            :aria-label="opt.label + (o.attrValueAvailable(attr.attribute_id, opt.id) ? '' : ' - <?= $escaper->escapeJs(__('out of stock')) ?>')"
+                                            :title="opt.label"
+                                            @click="o.selectAttr(attr.attribute_id, opt.id)">
+                                        <span x-show="!opt.color" x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- GROUPED: associated product rows + qty steppers -->
+                    <template x-if="o.isGrouped() && o.product.associated.length">
+                        <div class="pos-options__group" :class="{ 'is-missing': o.groupTotalQty() < 1 }">
+                            <span class="pos-options__label">
+                                <span><?= $escaper->escapeHtml(__('Items')) ?></span>
+                                <span class="pos-options__required" aria-hidden="true">*</span>
+                            </span>
+                            <template x-for="row in o.product.associated" :key="row.id">
+                                <div class="pos-options__row"
+                                     :class="{ 'pos-options__row--disabled': row.in_stock === false }">
+                                    <div class="pos-options__row-info">
+                                        <span class="pos-options__row-name" x-text="row.name"></span>
+                                        <span class="pos-options__row-meta">
+                                            <span class="pos-amount" x-text="o.money(row.price)"></span>
+                                            <span x-show="row.sku" x-text="'· ' + row.sku"></span>
+                                            <span class="pos-badge pos-badge--danger"
+                                                  x-show="row.in_stock === false"><?= $escaper->escapeHtml(__('Out of stock')) ?></span>
+                                        </span>
+                                    </div>
+                                    <div class="pos-stepper"
+                                         :class="{ 'pos-stepper--disabled': row.in_stock === false }">
+                                        <button type="button" class="pos-stepper__btn"
+                                                :disabled="row.in_stock === false || (o.groupQty[row.id] || 0) <= 0"
+                                                @click="o.groupStep(row, -1)"
+                                                :aria-label="'<?= $escaper->escapeJs(__('Decrease quantity')) ?>: ' + row.name">
+                                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-minus"/></svg>
+                                        </button>
+                                        <input type="number" class="pos-stepper__value" min="0" max="999"
+                                               inputmode="numeric"
+                                               x-model.number="o.groupQty[row.id]"
+                                               @change="o.normalizeGroupQty(row)"
+                                               :disabled="row.in_stock === false"
+                                               :aria-label="'<?= $escaper->escapeJs(__('Quantity')) ?>: ' + row.name">
+                                        <button type="button" class="pos-stepper__btn"
+                                                :disabled="row.in_stock === false"
+                                                @click="o.groupStep(row, 1)"
+                                                :aria-label="'<?= $escaper->escapeJs(__('Increase quantity')) ?>: ' + row.name">
+                                            <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- BUNDLE: per-option select dropdown or tappable choices -->
+                    <template x-for="opt in o.product.bundle_options" :key="opt.option_id">
+                        <div class="pos-options__group"
+                             :class="{ 'is-missing': opt.required && !(o.isMultiBundle(opt) ? ((o.bundleSel[opt.option_id] || []).length > 0) : !!o.bundleSel[opt.option_id]) }">
+                            <span class="pos-options__label">
+                                <span x-text="opt.title"></span>
+                                <span class="pos-options__required" aria-hidden="true" x-show="opt.required">*</span>
+                            </span>
+                            <template x-if="opt.type === 'select' || opt.type === 'drop_down'">
+                                <select class="pos-select"
+                                        :aria-label="opt.title"
+                                        @change="o.pickBundleSelection(opt, $event.target.value)">
+                                    <option value=""><?= $escaper->escapeHtml(__('Choose...')) ?></option>
+                                    <template x-for="sel in opt.selections" :key="sel.selection_id">
+                                        <option :value="sel.selection_id"
+                                                :selected="o.isBundleSelected(opt, sel)"
+                                                :disabled="sel.in_stock === false"
+                                                x-text="sel.name
+                                                    + (sel.qty > 1 ? ' × ' + sel.qty : '')
+                                                    + (o.bundleSelectionPrice(sel) ? '  +' + o.money(o.bundleSelectionPrice(sel)) : '')
+                                                    + (sel.in_stock === false ? ' - <?= $escaper->escapeJs(__('out of stock')) ?>' : '')"></option>
+                                    </template>
+                                </select>
+                            </template>
+                            <template x-if="opt.type !== 'select' && opt.type !== 'drop_down'">
+                                <div class="pos-options__choices" role="group" :aria-label="opt.title">
+                                    <template x-for="sel in opt.selections" :key="sel.selection_id">
+                                        <button type="button"
+                                                class="pos-options__choice"
+                                                :class="{
+                                                    'pos-options__choice--active': o.isBundleSelected(opt, sel),
+                                                    'pos-options__choice--disabled': sel.in_stock === false
+                                                }"
+                                                :disabled="sel.in_stock === false"
+                                                :aria-pressed="o.isBundleSelected(opt, sel) ? 'true' : 'false'"
+                                                @click="o.toggleBundleSelection(opt, sel)">
+                                            <span class="pos-options__choice-mark" aria-hidden="true">
+                                                <svg class="pos-icon pos-icon--sm"><use href="#pi-check"/></svg>
+                                            </span>
+                                            <span class="pos-options__choice-label"
+                                                  x-text="sel.name + (sel.qty > 1 ? ' × ' + sel.qty : '')"></span>
+                                            <span class="pos-badge pos-badge--danger"
+                                                  x-show="sel.in_stock === false"><?= $escaper->escapeHtml(__('Out of stock')) ?></span>
+                                            <span class="pos-options__delta pos-amount"
+                                                  x-show="o.bundleSelectionPrice(sel) !== 0"
+                                                  x-text="'+ ' + o.money(o.bundleSelectionPrice(sel))"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </template>
+                            <!-- Qty for the chosen selection (when it allows it) -->
+                            <div class="pos-options__row pos-options__row--qty" x-show="o.bundleQtyEditable(opt)">
+                                <span class="pos-options__row-name"><?= $escaper->escapeHtml(__('Qty')) ?></span>
+                                <div class="pos-stepper">
+                                    <button type="button" class="pos-stepper__btn"
+                                            :disabled="(o.bundleQty[opt.option_id] || 1) <= 1"
+                                            @click="o.bundleStepQty(opt, -1)"
+                                            aria-label="<?= $escaper->escapeHtmlAttr(__('Decrease quantity')) ?>">
+                                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-minus"/></svg>
+                                    </button>
+                                    <input type="number" class="pos-stepper__value" min="1" max="999"
+                                           inputmode="numeric"
+                                           x-model.number="o.bundleQty[opt.option_id]"
+                                           @change="o.bundleStepQty(opt, 0)"
+                                           aria-label="<?= $escaper->escapeHtmlAttr(__('Quantity')) ?>">
+                                    <button type="button" class="pos-stepper__btn"
+                                            @click="o.bundleStepQty(opt, 1)"
+                                            aria-label="<?= $escaper->escapeHtmlAttr(__('Increase quantity')) ?>">
+                                        <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- CUSTOM OPTIONS (any type) -->
+                    <template x-for="opt in o.customOptions()" :key="opt.option_id">
+                        <div class="pos-options__group"
+                             :class="{ 'is-missing': opt.required && opt.type !== 'file' && !o.customFilled(opt) }">
+                            <span class="pos-options__label">
+                                <span x-text="opt.title"></span>
+                                <span class="pos-options__required" aria-hidden="true" x-show="opt.required">*</span>
+                                <span class="pos-options__delta pos-amount"
+                                      x-show="opt.values.length === 0 && opt.price !== 0"
+                                      x-text="'+ ' + o.money(opt.price_type === 'percent' ? o.basePrice() * opt.price / 100 : opt.price)"></span>
+                            </span>
+                            <template x-if="opt.type === 'field'">
+                                <input type="text" class="pos-input"
+                                       x-model="o.custom[opt.option_id]"
+                                       :maxlength="opt.max_characters > 0 ? opt.max_characters : false"
+                                       :aria-label="opt.title"
+                                       autocomplete="off">
+                            </template>
+                            <template x-if="opt.type === 'area'">
+                                <textarea class="pos-textarea" rows="3"
+                                          x-model="o.custom[opt.option_id]"
+                                          :maxlength="opt.max_characters > 0 ? opt.max_characters : false"
+                                          :aria-label="opt.title"></textarea>
+                            </template>
+                            <template x-if="opt.type === 'drop_down'">
+                                <select class="pos-select"
+                                        x-model="o.custom[opt.option_id]"
+                                        :aria-label="opt.title">
+                                    <option value=""><?= $escaper->escapeHtml(__('Choose...')) ?></option>
+                                    <template x-for="val in opt.values" :key="val.id">
+                                        <option :value="val.id"
+                                                x-text="val.title + (o.customValueDelta(val) ? '  +' + o.money(o.customValueDelta(val)) : '')"></option>
+                                    </template>
+                                </select>
+                            </template>
+                            <template x-if="opt.type === 'radio' || opt.type === 'checkbox' || opt.type === 'multiple' || opt.type === 'multi'">
+                                <div class="pos-options__choices" role="group" :aria-label="opt.title">
+                                    <template x-for="val in opt.values" :key="val.id">
+                                        <button type="button"
+                                                class="pos-options__choice"
+                                                :class="{ 'pos-options__choice--active': o.customHas(opt, val.id) }"
+                                                :aria-pressed="o.customHas(opt, val.id) ? 'true' : 'false'"
+                                                @click="o.toggleCustomValue(opt, val.id)">
+                                            <span class="pos-options__choice-mark" aria-hidden="true">
+                                                <svg class="pos-icon pos-icon--sm"><use href="#pi-check"/></svg>
+                                            </span>
+                                            <span class="pos-options__choice-label" x-text="val.title"></span>
+                                            <span class="pos-options__delta pos-amount"
+                                                  x-show="o.customValueDelta(val) !== 0"
+                                                  x-text="'+ ' + o.money(o.customValueDelta(val))"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="opt.type === 'date'">
+                                <input type="date" class="pos-input"
+                                       x-model="o.custom[opt.option_id]"
+                                       :aria-label="opt.title">
+                            </template>
+                            <template x-if="opt.type === 'time'">
+                                <input type="time" class="pos-input"
+                                       x-model="o.custom[opt.option_id]"
+                                       :aria-label="opt.title">
+                            </template>
+                            <template x-if="opt.type === 'date_time'">
+                                <input type="datetime-local" class="pos-input"
+                                       x-model="o.custom[opt.option_id]"
+                                       :aria-label="opt.title">
+                            </template>
+                            <template x-if="opt.type === 'file'">
+                                <span class="pos-options__hint">
+                                    <?= $escaper->escapeHtml(__('File options are not supported at the POS register - sell this product online.')) ?>
+                                </span>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- Running price (client display - server prices the quote) -->
+                    <div class="pos-options__total">
+                        <span class="pos-options__total-label"><?= $escaper->escapeHtml(__('Total')) ?></span>
+                        <span class="pos-options__total-amount pos-amount" x-text="o.totalText()"></span>
+                    </div>
+                    <span class="pos-options__hint" x-show="o.missingHint() !== ''" x-text="o.missingHint()"></span>
+                    <span class="pos-options__hint" x-show="o.missingHint() === ''">
+                        <?= $escaper->escapeHtml(__('Final price is confirmed by the register when added.')) ?>
+                    </span>
+                </div>
+            </template>
+        </div>
+
+        <div class="pos-modal__footer">
+            <div class="pos-stepper" x-show="o.product">
+                <button type="button" class="pos-stepper__btn"
+                        :disabled="o.qty <= 1"
+                        @click="o.decQty()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Decrease quantity')) ?>">
+                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-minus"/></svg>
+                </button>
+                <input type="number" class="pos-stepper__value" min="1" max="999"
+                       inputmode="numeric"
+                       x-model.number="o.qty"
+                       @change="o.normalizeQty()"
+                       aria-label="<?= $escaper->escapeHtmlAttr(__('Quantity')) ?>">
+                <button type="button" class="pos-stepper__btn"
+                        @click="o.incQty()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Increase quantity')) ?>">
+                    <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-plus"/></svg>
+                </button>
+            </div>
+            <button type="button"
+                    class="pos-btn pos-btn--primary"
+                    x-show="o.product"
+                    :disabled="o.adding || !o.isValid()"
+                    @click="o.add()">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-cart"/></svg>
+                <span x-text="o.adding ? '<?= $escaper->escapeJs(__('Adding...')) ?>' : '<?= $escaper->escapeJs(__('Add to cart')) ?>'"></span>
+            </button>
+            <button type="button" class="pos-btn pos-btn--ghost" @click="o.close()">
+                <?= $escaper->escapeHtml(__('Close')) ?>
+            </button>
+        </div>
+    </div>
+</div>

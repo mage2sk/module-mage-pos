@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Adds POS columns to the admin sales order grid. The column data is joined
+ * by Panth\MagePos\Plugin\SalesOrderGridCollectionPlugin (left join on
+ * panth_pos_order + register/user name lookups), so non-POS orders show
+ * empty values. Hidden by default.
+ */
+-->
+<listing xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Ui:etc/ui_configuration.xsd">
+    <columns name="sales_order_columns">
+        <column name="pos_register">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">POS Register</label>
+                <visible>false</visible>
+            </settings>
+        </column>
+        <column name="pos_cashier">
+            <settings>
+                <filter>text</filter>
+                <label translate="true">POS Cashier</label>
+                <visible>false</visible>
+            </settings>
+        </column>
+    </columns>
+</listing>

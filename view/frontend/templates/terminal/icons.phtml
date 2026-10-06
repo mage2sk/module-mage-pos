@@ -1,0 +1,320 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS terminal SVG icon sprite (design brief "Iconography - kill the emoji").
+ * One hidden <svg> with <symbol> defs: 24px-grid UI icons (1.75 stroke,
+ * currentColor, round caps/joins) plus four 120x90 line-art empty-state
+ * illustrations. Include once from terminal.phtml; consume anywhere with
+ * <svg class="pos-icon"><use href="#pi-cash"/></svg>. Accent details in the
+ * illustrations carry class="pi-accent" and stroke="var(--pi-accent, ...)" so
+ * themes can tint them.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+
+    <!-- ============================== 24px UI icons ============================== -->
+
+    <symbol id="pi-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.5 8V5.5a2 2 0 0 1 2-2H8"/>
+        <path d="M16 3.5h2.5a2 2 0 0 1 2 2V8"/>
+        <path d="M20.5 16v2.5a2 2 0 0 1-2 2H16"/>
+        <path d="M8 20.5H5.5a2 2 0 0 1-2-2V16"/>
+        <path d="M3.5 12h17"/>
+    </symbol>
+
+    <symbol id="pi-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="6.5"/>
+        <path d="m15.75 15.75 4.5 4.5"/>
+    </symbol>
+
+    <symbol id="pi-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 4h2.2l2.3 10.9a1.7 1.7 0 0 0 1.66 1.35h7.78a1.7 1.7 0 0 0 1.66-1.32L20.5 8H6"/>
+        <circle cx="9.6" cy="20" r="1.25"/>
+        <circle cx="17.4" cy="20" r="1.25"/>
+    </symbol>
+
+    <symbol id="pi-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="3.75"/>
+        <path d="M5.25 20.25a6.75 6.75 0 0 1 13.5 0"/>
+    </symbol>
+
+    <symbol id="pi-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9" cy="8.5" r="3.25"/>
+        <path d="M3.25 19.75a5.75 5.75 0 0 1 11.5 0"/>
+        <path d="M15.6 5.55a3.25 3.25 0 0 1 0 5.9"/>
+        <path d="M17.4 14.75c2.05.85 3.35 2.6 3.35 5"/>
+    </symbol>
+
+    <symbol id="pi-hold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="8.75"/>
+        <path d="M9.75 9v6"/>
+        <path d="M14.25 9v6"/>
+    </symbol>
+
+    <symbol id="pi-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 21V4.6A1.6 1.6 0 0 0 16.4 3H7.6A1.6 1.6 0 0 0 6 4.6V21l2-1.5 2 1.5 2-1.5 2 1.5 2-1.5 2 1.5z"/>
+        <path d="M9.25 7.75h5.5"/>
+        <path d="M9.25 11.25h5.5"/>
+        <path d="M9.25 14.75h3"/>
+    </symbol>
+
+    <symbol id="pi-cash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.5" y="6.5" width="19" height="11" rx="2"/>
+        <circle cx="12" cy="12" r="2.4"/>
+        <path d="M6 12h.01"/>
+        <path d="M18 12h.01"/>
+    </symbol>
+
+    <symbol id="pi-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.5" y="5.5" width="19" height="13" rx="2.2"/>
+        <path d="M2.5 9.75h19"/>
+        <path d="M6 14.75h3.5"/>
+    </symbol>
+
+    <symbol id="pi-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.1 13.1a4.6 4.6 0 0 0 6.94.5l2.6-2.6a4.6 4.6 0 0 0-6.5-6.5l-1.5 1.48"/>
+        <path d="M13.9 10.9a4.6 4.6 0 0 0-6.94-.5l-2.6 2.6a4.6 4.6 0 0 0 6.5 6.5l1.49-1.48"/>
+    </symbol>
+
+    <symbol id="pi-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3.5" y="3.5" width="6.8" height="6.8" rx="1.4"/>
+        <rect x="13.7" y="3.5" width="6.8" height="6.8" rx="1.4"/>
+        <rect x="3.5" y="13.7" width="6.8" height="6.8" rx="1.4"/>
+        <path d="M6.9 6.9h.01"/>
+        <path d="M17.1 6.9h.01"/>
+        <path d="M6.9 17.1h.01"/>
+        <path d="M13.7 13.7h3v3h-3z"/>
+        <path d="M20.5 13.7v.01"/>
+        <path d="M13.7 20.5h.01"/>
+        <path d="M17.4 20.5h3.1v-3.1"/>
+    </symbol>
+
+    <symbol id="pi-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.37 4.36c.42-1.71 2.84-1.71 3.26 0a1.68 1.68 0 0 0 2.5 1.04c1.5-.92 3.23.8 2.31 2.31a1.68 1.68 0 0 0 1.04 2.5c1.71.42 1.71 2.84 0 3.26a1.68 1.68 0 0 0-1.04 2.5c.92 1.5-.8 3.23-2.31 2.31a1.68 1.68 0 0 0-2.5 1.04c-.42 1.71-2.84 1.71-3.26 0a1.68 1.68 0 0 0-2.5-1.04c-1.5.92-3.23-.8-2.31-2.31a1.68 1.68 0 0 0-1.04-2.5c-1.71-.42-1.71-2.84 0-3.26a1.68 1.68 0 0 0 1.04-2.5c-.92-1.5.8-3.23 2.31-2.31a1.68 1.68 0 0 0 2.5-1.04z"/>
+        <circle cx="12" cy="12" r="2.9"/>
+    </symbol>
+
+    <symbol id="pi-layout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3.5" y="3.5" width="7.25" height="7.25" rx="1.6"/>
+        <rect x="13.25" y="3.5" width="7.25" height="7.25" rx="1.6"/>
+        <rect x="3.5" y="13.25" width="7.25" height="7.25" rx="1.6"/>
+        <rect x="13.25" y="13.25" width="7.25" height="7.25" rx="1.6"/>
+    </symbol>
+
+    <symbol id="pi-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4.75" y="10.5" width="14.5" height="10" rx="2"/>
+        <path d="M8.25 10.5V7.75a3.75 3.75 0 0 1 7.5 0v2.75"/>
+        <path d="M12 14.25v2.5"/>
+    </symbol>
+
+    <symbol id="pi-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9.5 20.5H5.75a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2H9.5"/>
+        <path d="m15.5 8 4 4-4 4"/>
+        <path d="M19.5 12h-10"/>
+    </symbol>
+
+    <symbol id="pi-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5.5v13"/>
+        <path d="M5.5 12h13"/>
+    </symbol>
+
+    <symbol id="pi-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5.5 12h13"/>
+    </symbol>
+
+    <symbol id="pi-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m6.5 6.5 11 11"/>
+        <path d="m17.5 6.5-11 11"/>
+    </symbol>
+
+    <symbol id="pi-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m5 12.5 4.5 4.5L19 7.5"/>
+    </symbol>
+
+    <symbol id="pi-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>
+    </symbol>
+
+    <symbol id="pi-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>
+    </symbol>
+
+    <symbol id="pi-printer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 8V4.25h10V8"/>
+        <path d="M7 16.5H5.3a1.8 1.8 0 0 1-1.8-1.8V9.8A1.8 1.8 0 0 1 5.3 8h13.4a1.8 1.8 0 0 1 1.8 1.8v4.9a1.8 1.8 0 0 1-1.8 1.8H17"/>
+        <rect x="7" y="13.5" width="10" height="6.25" rx="1"/>
+        <path d="M17.25 11h.01"/>
+    </symbol>
+
+    <symbol id="pi-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="5.5" width="18" height="13" rx="2"/>
+        <path d="m3.75 7.75 8.25 5.5 8.25-5.5"/>
+    </symbol>
+
+    <symbol id="pi-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2.75v2"/>
+        <path d="M12 19.25v2"/>
+        <path d="M2.75 12h2"/>
+        <path d="M19.25 12h2"/>
+        <path d="m5.1 5.1 1.4 1.4"/>
+        <path d="m17.5 17.5 1.4 1.4"/>
+        <path d="m18.9 5.1-1.4 1.4"/>
+        <path d="m6.5 17.5-1.4 1.4"/>
+    </symbol>
+
+    <symbol id="pi-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.5 13a8.6 8.6 0 1 1-9.5-9.5 6.9 6.9 0 0 0 9.5 9.5z"/>
+    </symbol>
+
+    <symbol id="pi-cash-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.5" y="10" width="13.5" height="9.5" rx="1.8"/>
+        <circle cx="9.25" cy="14.75" r="1.9"/>
+        <path d="M19 3.5v7"/>
+        <path d="M16.25 7.75 19 10.5l2.75-2.75"/>
+    </symbol>
+
+    <symbol id="pi-cash-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.5" y="10" width="13.5" height="9.5" rx="1.8"/>
+        <circle cx="9.25" cy="14.75" r="1.9"/>
+        <path d="M19 10.5v-7"/>
+        <path d="M16.25 6.25 19 3.5l2.75 2.75"/>
+    </symbol>
+
+    <symbol id="pi-report" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 3.5v15.2a1.8 1.8 0 0 0 1.8 1.8H20.5"/>
+        <path d="M8.5 16.5V12"/>
+        <path d="M12.75 16.5v-8"/>
+        <path d="M17 16.5v-5"/>
+    </symbol>
+
+    <symbol id="pi-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.5 11.16V5.5a2 2 0 0 1 2-2h5.66a2 2 0 0 1 1.42.59l7.33 7.32a2 2 0 0 1 0 2.83l-5.67 5.67a2 2 0 0 1-2.83 0l-7.32-7.33a2 2 0 0 1-.59-1.42z"/>
+        <path d="M7.75 7.75h.01"/>
+    </symbol>
+
+    <symbol id="pi-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.75 9.4a2.85 2.85 0 0 1 0 5.2V17a1.7 1.7 0 0 0 1.7 1.7h15.1a1.7 1.7 0 0 0 1.7-1.7v-2.4a2.85 2.85 0 0 1 0-5.2V7a1.7 1.7 0 0 0-1.7-1.7H4.45A1.7 1.7 0 0 0 2.75 7z"/>
+        <path d="M15 5.6v2"/>
+        <path d="M15 11v2"/>
+        <path d="M15 16.4v2"/>
+    </symbol>
+
+    <symbol id="pi-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 3.5c.66 4.06 2.7 6.1 6.75 6.75-4.05.66-6.1 2.7-6.75 6.75-.66-4.05-2.7-6.1-6.75-6.75C8.3 9.6 10.34 7.56 11 3.5z"/>
+        <path d="M18.25 15.5v5"/>
+        <path d="M15.75 18h5"/>
+    </symbol>
+
+    <symbol id="pi-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4.5H5.5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V13"/>
+        <path d="M18.84 3.66a2.05 2.05 0 0 1 2.9 2.9l-8.8 8.8-3.84.94.94-3.84z"/>
+    </symbol>
+
+    <symbol id="pi-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6.5h16"/>
+        <path d="M9.5 6.5V5A1.5 1.5 0 0 1 11 3.5h2A1.5 1.5 0 0 1 14.5 5v1.5"/>
+        <path d="m6 6.5.9 12.2a1.8 1.8 0 0 0 1.8 1.66h6.6a1.8 1.8 0 0 0 1.8-1.66L18 6.5"/>
+        <path d="M10 10.75v6"/>
+        <path d="M14 10.75v6"/>
+    </symbol>
+
+    <symbol id="pi-restore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.75 3.75v4.9h4.9"/>
+        <path d="M3.75 12a8.25 8.25 0 1 0 8.25-8.25c-2.4 0-4.55.94-6.13 2.46L3.75 8.13"/>
+    </symbol>
+
+    <symbol id="pi-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m12 3.75 2.47 5.01 5.53.8-4 3.9.94 5.51L12 16.36l-4.94 2.6.94-5.5-4-3.9 5.53-.8z"/>
+    </symbol>
+
+    <symbol id="pi-backspace" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9.3 5.5h9.2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9.3a2 2 0 0 1-1.58-.78L3.5 12l4.22-5.72A2 2 0 0 1 9.3 5.5z"/>
+        <path d="m11.75 9.5 5 5"/>
+        <path d="m16.75 9.5-5 5"/>
+    </symbol>
+
+    <symbol id="pi-camera-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m3 3 18 18"/>
+        <path d="M7.75 7.5H5.5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12.75"/>
+        <path d="M9.75 4.5h4.5l1.75 3h2.5a2 2 0 0 1 2 2v6.75"/>
+        <path d="M14.12 14.62a3 3 0 1 1-4.24-4.24"/>
+    </symbol>
+
+    <!-- ===================== 120x90 empty-state illustrations ===================== -->
+
+    <symbol id="pi-empty-cart" viewBox="0 0 120 90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M28 30h8.5l6.3 28.4a4 4 0 0 0 3.9 3.1h26.9a4 4 0 0 0 3.9-3.1L83 36H39.5"/>
+        <circle cx="52" cy="71" r="4.5"/>
+        <circle cx="74.5" cy="71" r="4.5"/>
+        <path d="M22 80h24"/>
+        <path d="M52 80h32"/>
+        <path d="M90 80h8"/>
+        <g class="pi-accent" stroke="var(--pi-accent, currentColor)">
+            <path d="M58 47c1.5 1.8 6.5 1.8 8 0"/>
+            <path d="M95 18v8"/>
+            <path d="M91 22h8"/>
+            <path d="M24 44v6"/>
+            <path d="M21 47h6"/>
+            <path d="M104 36h.01"/>
+        </g>
+    </symbol>
+
+    <symbol id="pi-empty-search" viewBox="0 0 120 90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="52" cy="39" r="20"/>
+        <path d="M66.5 53.5 80 67"/>
+        <path d="m79 70 4.5 4.5"/>
+        <path d="M24 80h32"/>
+        <path d="M62 80h28"/>
+        <g class="pi-accent" stroke="var(--pi-accent, currentColor)">
+            <path d="M45.5 36.5h.01"/>
+            <path d="M58.5 36.5h.01"/>
+            <path d="M46 46c2 -2 10 -2 12 0"/>
+            <path d="M90 24v8"/>
+            <path d="M86 28h8"/>
+            <path d="M26 22v6"/>
+            <path d="M23 25h6"/>
+            <path d="M98 50h.01"/>
+        </g>
+    </symbol>
+
+    <symbol id="pi-empty-holds" viewBox="0 0 120 90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="38" y="22" width="36" height="44" rx="7"/>
+        <path d="M30 80h28"/>
+        <path d="M64 80h26"/>
+        <circle cx="87" cy="58" r="9.5"/>
+        <path d="M87 53v5l3.4 2.8"/>
+        <g class="pi-accent" stroke="var(--pi-accent, currentColor)">
+            <path d="M51 36v16"/>
+            <path d="M61 36v16"/>
+            <path d="M97 22v8"/>
+            <path d="M93 26h8"/>
+            <path d="M26 34v6"/>
+            <path d="M23 37h6"/>
+            <path d="M104 42h.01"/>
+        </g>
+    </symbol>
+
+    <symbol id="pi-empty-keys" viewBox="0 0 120 90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="32" y="16" width="25" height="25" rx="6"/>
+        <rect x="63" y="16" width="25" height="25" rx="6"/>
+        <rect x="32" y="47" width="25" height="25" rx="6"/>
+        <path d="M28 80h34"/>
+        <path d="M68 80h24"/>
+        <g class="pi-accent" stroke="var(--pi-accent, currentColor)">
+            <rect x="63" y="47" width="25" height="25" rx="6" stroke-dasharray="4 5"/>
+            <path d="M75.5 54.5v10"/>
+            <path d="M70.5 59.5h10"/>
+            <path d="M100 24v8"/>
+            <path d="M96 28h8"/>
+            <path d="M22 28v6"/>
+            <path d="M19 31h6"/>
+            <path d="M102 58h.01"/>
+        </g>
+    </symbol>
+
+</svg>

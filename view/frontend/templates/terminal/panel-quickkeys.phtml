@@ -1,0 +1,189 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS terminal - quick keys panel: paged favourite-product tiles rendered
+ * with the catalog product-card anatomy (UI-fix contract items 20 + 45:
+ * 4:3 image, 2-line name clamp, price pill - .pos-quickkey--card variant;
+ * the deterministic tile color survives as a slim top identity bar and as
+ * the no-image fallback tint). Tap a tile to add it to the active cart; the
+ * pencil toggle (can_edit_layout) reveals per-tile remove (pi-trash) and
+ * ◂ ▸ reorder chrome persisted via pos/catalog/quickkeySave|quickkeyRemove.
+ * Tiles are pinned from product cards (star) or managed in bulk in
+ * Admin > Point of Sale > Quick Keys.
+ *
+ * Layout (item 37): .pos-quickkeys__grid is the same auto-FILL recipe as
+ * the catalog grid (repeat(auto-fill, minmax(tile, 1fr)), justify/align-
+ * content:start, content-sized rows) so a single tile sits neatly top-left
+ * as one normal tile and many tiles fill rows evenly - never a stretched
+ * tile or one card floating mid-panel. The empty state / busy spinner
+ * centers both ways in the panel body (margin:auto).
+ *
+ * Ghost add-tiles: when a page has few/zero real tiles, 1-3 subtle dashed
+ * placeholder tiles render AFTER the real ones (same grid cell) so the
+ * panel never reads as a blank area - a small star + "Pin a product"
+ * nudges the operator toward the product-card star. Count logic lives in
+ * the small nested x-data on the grid (posQuickKeys() stays untouched).
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<section class="pos-panel pos-panel--quickkeys"
+         id="pos-panel-quickkeys"
+         data-panel="quickkeys"
+         x-data="posQuickKeys()"
+         x-cloak>
+    <header class="pos-panel__header" data-drag-handle>
+        <span class="pos-panel__drag" aria-hidden="true"></span>
+        <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Quick Keys')) ?></span>
+        <span class="pos-panel__actions">
+            <span class="pos-quickkeys__pager" x-show="pageCount() > 1">
+                <button type="button"
+                        class="pos-quickkeys__pager-btn"
+                        @click="prevPage()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Previous page')) ?>">&#8249;</button>
+                <template x-for="p in pages()" :key="p">
+                    <button type="button"
+                            class="pos-quickkeys__dot"
+                            :class="{ 'pos-quickkeys__dot--active': p === page }"
+                            @click="page = p"
+                            :aria-label="'<?= $escaper->escapeJs(__('Page')) ?> ' + p"></button>
+                </template>
+                <button type="button"
+                        class="pos-quickkeys__pager-btn"
+                        @click="nextPage()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Next page')) ?>">&#8250;</button>
+            </span>
+            <!-- Edit toggle (item 20): reveals remove + reorder on tiles -->
+            <button type="button"
+                    class="pos-quickkeys__pager-btn pos-quickkeys__edit-toggle"
+                    x-show="canEdit() && tiles.length > 0"
+                    :style="editing ? 'color:var(--pos-accent-ink);border-color:var(--pos-accent);background:var(--pos-accent-soft);' : ''"
+                    :aria-pressed="editing ? 'true' : 'false'"
+                    @click="toggleEdit()"
+                    title="<?= $escaper->escapeHtmlAttr(__('Edit quick keys')) ?>"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Edit quick keys')) ?>">
+                <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-note"/></svg>
+            </button>
+        </span>
+    </header>
+
+    <div class="pos-panel__body pos-quickkeys">
+        <?php /* Nested x-data = template-only helpers (parent posQuickKeys()
+                 scope stays reachable through Alpine's merged scope chain):
+                 ghostCount() - dashed add-tile count per page: 0 real tiles
+                 -> 3 ghosts, 1-2 -> 2, 3-5 -> 1, 6+ -> none, busy -> none.
+                 hintPin() - toast pointing at the product-card star. */ ?>
+        <div class="pos-quickkeys__grid"
+             x-data="{
+                 ghostCount() {
+                     if (this.busy) { return 0; }
+                     var n = this.pageTiles().length;
+                     return n === 0 ? 3 : (n <= 2 ? 2 : (n <= 5 ? 1 : 0));
+                 },
+                 hintPin() {
+                     if (this.$store.pos && typeof this.$store.pos.notify === 'function') {
+                         this.$store.pos.notify('<?= $escaper->escapeJs(__('Tap the star on any product card to pin it here as a quick key.')) ?>', 'info');
+                     }
+                 }
+             }"
+             x-show="pageTiles().length > 0 || ghostCount() > 0">
+            <?php /* Tile = div[role=button] so the edit-mode remove/reorder
+                     buttons can live inside it (buttons cannot nest).
+                     Item 45: real tiles share the catalog product-card
+                     anatomy - 4:3 artwork, 2-line clamped name, price pill
+                     (.pos-card__* classes; .pos-quickkey--card carries the
+                     card surface + lift, with the deterministic tile color
+                     surviving as the top identity bar / fallback tint). */ ?>
+            <template x-for="(tile, idx) in pageTiles()" :key="tile.quick_key_id">
+                <div class="pos-quickkey pos-quickkey--card"
+                     role="button"
+                     tabindex="0"
+                     :class="{ 'is-editing': editing }"
+                     :style="'--tile-color:' + tileColor(tile, idx)"
+                     :aria-label="tile.label || tile.name"
+                     @click="tap(tile)"
+                     @keydown.enter.prevent="tap(tile)"
+                     @keydown.space.prevent="tap(tile)">
+                    <template x-if="tile.image">
+                        <img class="pos-card__image"
+                             :src="tile.image"
+                             :alt="tile.label || tile.name"
+                             loading="lazy">
+                    </template>
+                    <template x-if="!tile.image">
+                        <span class="pos-card__image pos-quickkey__image" aria-hidden="true">
+                            <svg class="pos-icon" focusable="false"><use href="#pi-star"/></svg>
+                        </span>
+                    </template>
+                    <span class="pos-card__name" x-text="tile.label || tile.name"></span>
+                    <span class="pos-card__price pos-amount" x-text="money(tile.price)"></span>
+                    <!-- Edit chrome: ◂ ▸ reorder + remove (item 20) -->
+                    <template x-if="editing">
+                        <span class="pos-quickkey__edit">
+                            <button type="button"
+                                    class="pos-quickkeys__pager-btn"
+                                    :disabled="idx === 0"
+                                    @click.stop="moveTile(tile, -1)"
+                                    @keydown.enter.stop
+                                    @keydown.space.stop
+                                    :aria-label="'<?= $escaper->escapeJs(__('Move earlier')) ?>: ' + tile.label"
+                                    title="<?= $escaper->escapeHtmlAttr(__('Move earlier')) ?>">
+                                <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false" style="transform:rotate(180deg);"><use href="#pi-chevron-right"/></svg>
+                            </button>
+                            <button type="button"
+                                    class="pos-quickkeys__pager-btn"
+                                    :disabled="idx === pageTiles().length - 1"
+                                    @click.stop="moveTile(tile, 1)"
+                                    @keydown.enter.stop
+                                    @keydown.space.stop
+                                    :aria-label="'<?= $escaper->escapeJs(__('Move later')) ?>: ' + tile.label"
+                                    title="<?= $escaper->escapeHtmlAttr(__('Move later')) ?>">
+                                <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-chevron-right"/></svg>
+                            </button>
+                            <button type="button"
+                                    class="pos-quickkeys__pager-btn pos-quickkey__remove"
+                                    style="color:var(--pos-danger-ink, var(--pos-danger));"
+                                    @click.stop="removeTile(tile)"
+                                    @keydown.enter.stop
+                                    @keydown.space.stop
+                                    :aria-label="'<?= $escaper->escapeJs(__('Remove from Quick Keys')) ?>: ' + tile.label"
+                                    title="<?= $escaper->escapeHtmlAttr(__('Remove from Quick Keys')) ?>">
+                                <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-trash"/></svg>
+                            </button>
+                        </span>
+                    </template>
+                </div>
+            </template>
+
+            <?php /* Ghost add-tiles - rendered AFTER the real tiles in the
+                     same grid cells. Real <button>s (no edit chrome ever
+                     nests inside them); tap = friendly toast nudge. */ ?>
+            <template x-for="g in ghostCount()" :key="'ghost-' + g">
+                <button type="button"
+                        class="pos-quickkey pos-quickkey--ghost"
+                        @click="hintPin()"
+                        title="<?= $escaper->escapeHtmlAttr(__('Pin a product from the catalog')) ?>"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Pin a product from the catalog')) ?>">
+                    <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-star"/></svg>
+                    <span class="pos-quickkey__ghost-label"><?= $escaper->escapeHtml(__('Pin a product')) ?></span>
+                </button>
+            </template>
+        </div>
+
+        <?php /* All-empty: the centered friendly message keeps the panel
+                 welcoming below the 3 ghost tiles the grid still shows. */ ?>
+        <div class="pos-quickkeys__empty pos-empty" x-show="!busy && pageTiles().length === 0">
+            <span class="pos-empty__icon" aria-hidden="true">
+                <svg class="pos-icon"><use href="#pi-empty-keys"/></svg>
+            </span>
+            <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No quick keys yet.')) ?></span>
+            <span class="pos-muted"><?= $escaper->escapeHtml(__('Tap the star on any product card to pin it here as a one-tap tile - or manage them in bulk in Admin > Point of Sale > Quick Keys.')) ?></span>
+        </div>
+
+        <div class="pos-quickkeys__empty" x-show="busy">
+            <span class="pos-spinner" aria-hidden="true"></span>
+        </div>
+    </div>
+</section>

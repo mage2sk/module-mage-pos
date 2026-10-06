@@ -1,0 +1,81 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Admin pager for the Cash Drawer Movements table on the POS session view.
+ * Rendered by Magento\Theme\Block\Html\Pager (the stock frontend pager
+ * template does not resolve in the adminhtml area, hence this one). URLs are
+ * built with _current=true so session_id and the admin secret key survive.
+ *
+ * @var \Magento\Theme\Block\Html\Pager $block
+ */
+
+$collection = $block->getCollection();
+?>
+<?php if ($collection !== null && $block->getTotalNum() > 0): ?>
+    <div class="panth-pos-pager">
+        <span class="panth-pos-pager-amount">
+            <?php if ($block->getLastPageNum() > 1): ?>
+                <?= $block->escapeHtml(__(
+                    'Records %1-%2 of %3',
+                    $block->getFirstNum(),
+                    $block->getLastNum(),
+                    $block->getTotalNum()
+                )) ?>
+            <?php else: ?>
+                <?= $block->escapeHtml(__('%1 record(s)', $block->getTotalNum())) ?>
+            <?php endif; ?>
+        </span>
+        <?php if ($block->getLastPageNum() > 1): ?>
+            <?php $pages = $block->getPages(); ?>
+            <ul class="panth-pos-pager-pages">
+                <li>
+                    <?php if (!$block->isFirstPage()): ?>
+                        <a href="<?= $block->escapeUrl($block->getPreviousPageUrl()) ?>"
+                           class="panth-pos-pager-action"
+                           title="<?= $block->escapeHtmlAttr(__('Previous Page')) ?>">&#8249;</a>
+                    <?php else: ?>
+                        <span class="panth-pos-pager-action disabled">&#8249;</span>
+                    <?php endif; ?>
+                </li>
+                <?php if (!empty($pages) && reset($pages) > 1): ?>
+                    <li>
+                        <a href="<?= $block->escapeUrl($block->getPageUrl(1)) ?>"
+                           class="panth-pos-pager-action">1</a>
+                    </li>
+                    <?php if (reset($pages) > 2): ?>
+                        <li><span class="panth-pos-pager-gap">&hellip;</span></li>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <?php foreach ($pages as $page): ?>
+                    <li>
+                        <?php if ($block->isPageCurrent($page)): ?>
+                            <strong class="panth-pos-pager-action current"><?= (int)$page ?></strong>
+                        <?php else: ?>
+                            <a href="<?= $block->escapeUrl($block->getPageUrl($page)) ?>"
+                               class="panth-pos-pager-action"><?= (int)$page ?></a>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+                <?php if (!empty($pages) && end($pages) < $block->getLastPageNum()): ?>
+                    <?php if (end($pages) < $block->getLastPageNum() - 1): ?>
+                        <li><span class="panth-pos-pager-gap">&hellip;</span></li>
+                    <?php endif; ?>
+                    <li>
+                        <a href="<?= $block->escapeUrl($block->getPageUrl($block->getLastPageNum())) ?>"
+                           class="panth-pos-pager-action"><?= (int)$block->getLastPageNum() ?></a>
+                    </li>
+                <?php endif; ?>
+                <li>
+                    <?php if (!$block->isLastPage()): ?>
+                        <a href="<?= $block->escapeUrl($block->getNextPageUrl()) ?>"
+                           class="panth-pos-pager-action"
+                           title="<?= $block->escapeHtmlAttr(__('Next Page')) ?>">&#8250;</a>
+                    <?php else: ?>
+                        <span class="panth-pos-pager-action disabled">&#8250;</span>
+                    <?php endif; ?>
+                </li>
+            </ul>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>

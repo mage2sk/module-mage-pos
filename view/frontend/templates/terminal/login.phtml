@@ -1,0 +1,183 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Login screen + PIN lock overlay (spec §9) - "Tactile Console" hero treatment:
+ * - register picker fed from GET pos/auth/state -> registers (Register\All payload shape),
+ *   rendered as tactile radio tiles (.pos-list__item.pos-register-option)
+ * - username/password form (leading sprite icons) -> POST pos/auth/login
+ * - PIN unlock pad (reuses posKeypad, js/pos/keypad.js) -> POST pos/auth/pin
+ *
+ * Shown when $store.pos.view is 'login' (full sign-in) or 'locked' (idle/
+ * manual lock - PIN re-auth of the already signed-in username only, spec
+ * §12). The lock is persisted server-side (contract item 42): app.js boot
+ * renders this screen whenever GET pos/auth/state returns authenticated +
+ * locked, so a hard refresh while locked lands here, never in 'sale'.
+ * Escape hatches from the lock: password fallback (usePassword) or a full
+ * sign-out (signOut -> POST pos/auth/logout). Component posLogin() lives in
+ * js/pos/app.js.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+declare(strict_types=1);
+?>
+<!-- data-theme="dark" pins the "Ink Console" hero canvas (dark bg + matching glow)
+     regardless of the workspace theme - login is always the dark showpiece (brief §signature 4).
+     color must be re-declared so inherited body ink re-resolves against the dark tokens. -->
+<div class="pos-login"
+     data-theme="dark"
+     style="color: var(--pos-text);"
+     x-show="$store.pos.view === 'login' || $store.pos.view === 'locked'"
+     x-cloak
+     x-data="posLogin()">
+    <div class="pos-login__card">
+        <div class="pos-login__brand"
+             style="animation: pos-rise 480ms var(--pos-spring) 60ms backwards;">
+            <!-- Oversized Bricolage wordmark: hero scale (44px token) instead of the 34px default. -->
+            <h1 class="pos-login__store"
+                style="font-size: var(--pos-fs-4xl);"
+                x-text="$store.pos.config.store_name"></h1>
+            <!-- Accent caps subtitle, lightened toward ink for AA contrast on the dark surface
+                 (pure --pos-accent fails 4.5:1 at 13px; accent is merchant-themeable so mix is safest). -->
+            <p class="pos-login__subtitle"
+               style="color: color-mix(in oklch, var(--pos-accent) 45%, var(--pos-text));"><?= $escaper->escapeHtml(__('Point of Sale')) ?></p>
+        </div>
+
+        <!-- ============ Full sign-in (view: login) ============ -->
+        <template x-if="$store.pos.view === 'login'">
+            <form class="pos-login__form"
+                  style="animation: pos-rise 480ms var(--pos-spring) 140ms backwards;"
+                  @submit.prevent="submit()">
+                <!-- Register picker - tactile radio tiles -->
+                <div class="pos-field">
+                    <span class="pos-field__label"><?= $escaper->escapeHtml(__('Register')) ?></span>
+                    <ul class="pos-list" x-show="$store.pos.registers.length > 0"
+                        role="radiogroup"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Register')) ?>">
+                        <template x-for="register in $store.pos.registers" :key="register.register_id">
+                            <li class="pos-list__item pos-register-option"
+                                :class="{ 'pos-list__item--selected': registerId === Number(register.register_id) }"
+                                role="radio"
+                                :aria-checked="registerId === Number(register.register_id) ? 'true' : 'false'"
+                                tabindex="0"
+                                @click="registerId = Number(register.register_id); saveRegister()"
+                                @keydown.enter.prevent="registerId = Number(register.register_id); saveRegister()"
+                                @keydown.space.prevent="registerId = Number(register.register_id); saveRegister()">
+                                <span class="pos-register-option__radio" aria-hidden="true"></span>
+                                <span class="pos-list__item-info">
+                                    <strong x-text="register.name"></strong>
+                                    <span class="pos-muted" x-text="register.code"></span>
+                                </span>
+                            </li>
+                        </template>
+                    </ul>
+                    <p class="pos-login__hint"
+                       x-show="$store.pos.registers.length === 0"
+                       x-cloak><?= $escaper->escapeHtml(__('No active registers are configured. Ask an administrator.')) ?></p>
+                </div>
+
+                <label class="pos-field">
+                    <span class="pos-field__label"><?= $escaper->escapeHtml(__('Username')) ?></span>
+                    <span class="pos-search">
+                        <svg class="pos-icon pos-search__icon" aria-hidden="true"><use href="#pi-user"/></svg>
+                        <input class="pos-input"
+                               type="text"
+                               name="username"
+                               x-model="username"
+                               placeholder="<?= $escaper->escapeHtmlAttr(__('Username')) ?>"
+                               autocomplete="username"
+                               autocapitalize="off"
+                               spellcheck="false"
+                               required>
+                    </span>
+                </label>
+
+                <label class="pos-field">
+                    <span class="pos-field__label"><?= $escaper->escapeHtml(__('Password')) ?></span>
+                    <span class="pos-search">
+                        <svg class="pos-icon pos-search__icon" aria-hidden="true"><use href="#pi-lock"/></svg>
+                        <input class="pos-input"
+                               type="password"
+                               name="password"
+                               x-model="password"
+                               placeholder="<?= $escaper->escapeHtmlAttr(__('Password')) ?>"
+                               autocomplete="current-password"
+                               required>
+                    </span>
+                </label>
+
+                <p class="pos-login__error" x-show="error !== ''" x-text="error" x-cloak role="alert"></p>
+
+                <button type="submit"
+                        class="pos-btn pos-btn--primary pos-btn--lg pos-btn--block"
+                        :disabled="busy">
+                    <span x-show="!busy"><?= $escaper->escapeHtml(__('Sign in')) ?></span>
+                    <span x-show="busy" x-cloak><?= $escaper->escapeHtml(__('Signing in...')) ?></span>
+                </button>
+            </form>
+        </template>
+
+        <!-- ============ PIN unlock (view: locked) ============ -->
+        <template x-if="$store.pos.view === 'locked'">
+            <div class="pos-login__pin"
+                 style="animation: pos-rise 480ms var(--pos-spring) 140ms backwards;"
+                 x-data="posKeypad({ mode: 'pin', maxLength: 8 })"
+                 @keydown.window="keyboard($event)"
+                 @keypad-submit="unlock($event.detail.value); clear()">
+                <p class="pos-login__locked-title">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-lock"/></svg>
+                    <?= $escaper->escapeHtml(__('Terminal locked')) ?>
+                </p>
+                <p class="pos-login__locked-user">
+                    <?= $escaper->escapeHtml(__('Enter PIN for')) ?>
+                    <strong x-text="$store.pos.lockedUsername"></strong>
+                </p>
+
+                <div class="pos-keypad__display pos-keypad__display--pin"
+                     x-text="masked === '' ? '·' : masked"
+                     aria-label="<?= $escaper->escapeHtmlAttr(__('PIN')) ?>"></div>
+
+                <div class="pos-keypad">
+                    <template x-for="key in keypadKeys" :key="key">
+                        <button type="button"
+                                class="pos-keypad__key"
+                                :class="{ 'pos-keypad__key--action': key === 'clear' || key === 'back' }"
+                                :aria-label="key === 'back' ? '<?= $escaper->escapeJs(__('Delete digit')) ?>' : (key === 'clear' ? '<?= $escaper->escapeJs(__('Clear')) ?>' : key)"
+                                @click="press(key)">
+                            <template x-if="key === 'back'">
+                                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+                            </template>
+                            <template x-if="key !== 'back'">
+                                <span x-text="keyLabel(key)"></span>
+                            </template>
+                        </button>
+                    </template>
+                </div>
+
+                <p class="pos-login__error" x-show="error !== ''" x-text="error" x-cloak role="alert"></p>
+
+                <button type="button"
+                        class="pos-btn pos-btn--primary pos-btn--lg pos-btn--block"
+                        :disabled="busy || value === ''"
+                        @click="submit()"><?= $escaper->escapeHtml(__('Unlock')) ?></button>
+
+                <button type="button"
+                        class="pos-btn pos-btn--link pos-btn--block"
+                        @click="usePassword()"><?= $escaper->escapeHtml(__('Sign in with password instead')) ?></button>
+
+                <button type="button"
+                        class="pos-btn pos-btn--link pos-btn--block"
+                        :disabled="busy"
+                        @click="signOut()"><?= $escaper->escapeHtml(__('Sign out completely')) ?></button>
+            </div>
+        </template>
+
+        <p class="pos-login__footer"
+           style="animation: pos-rise 480ms var(--pos-spring) 220ms backwards;">
+            <span class="pos-indicator"
+                  :class="$store.pos.online ? 'pos-indicator--online' : 'pos-indicator--offline'"
+                  x-text="$store.pos.online ? Pos.t('online') : Pos.t('offline')"></span>
+        </p>
+    </div>
+</div>

@@ -1,0 +1,247 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Standalone printable POS receipt (80 mm thermal friendly). Rendered outside
+ * the theme layout by Panth\MagePos\Service\ReceiptService::renderHtml() so it
+ * is identical on Hyva and Luma. Data shape: ReceiptService::getReceiptData().
+ */
+declare(strict_types=1);
+
+/** @var \Magento\Framework\View\Element\Template $block */
+/** @var \Magento\Framework\Escaper $escaper */
+
+$receipt = (array)($block->getData('receipt') ?? []);
+$totals = (array)($receipt['totals'] ?? []);
+$items = (array)($receipt['items'] ?? []);
+$payments = (array)($receipt['payments'] ?? []);
+$taxBreakdown = (array)($receipt['tax_breakdown'] ?? []);
+$autoPrint = (string)$block->getRequest()->getParam('print') === '1';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title><?= $escaper->escapeHtml(__('Receipt %1', (string)($receipt['receipt_number'] ?? ''))) ?></title>
+    <link rel="stylesheet" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::css/fonts.css')) ?>">
+    <link rel="stylesheet" href="<?= $escaper->escapeUrl($block->getViewFileUrl('Panth_MagePos::css/receipt.css')) ?>">
+</head>
+<body>
+<div class="receipt-toolbar no-print">
+    <button type="button" class="receipt-toolbar__btn" onclick="window.print()">
+        <svg class="receipt-toolbar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 8V3.5h10V8"/>
+            <path d="M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="7" y="14" width="10" height="6.5" rx="1"/>
+        </svg>
+        <?= $escaper->escapeHtml(__('Print Receipt')) ?>
+    </button>
+</div>
+<div class="receipt">
+    <header class="receipt__head">
+        <?php if (!empty($receipt['logo_url'])): ?>
+            <img class="receipt__logo"
+                 src="<?= $escaper->escapeUrl((string)$receipt['logo_url']) ?>"
+                 alt="<?= $escaper->escapeHtmlAttr((string)($receipt['store_name'] ?? '')) ?>">
+        <?php endif; ?>
+        <?php if (!empty($receipt['store_name'])): ?>
+            <div class="receipt__store-name"><?= $escaper->escapeHtml((string)$receipt['store_name']) ?></div>
+        <?php endif; ?>
+        <?php if (!empty($receipt['store_address'])): ?>
+            <div class="receipt__store-address"><?= nl2br($escaper->escapeHtml((string)$receipt['store_address'])) ?></div>
+        <?php endif; ?>
+        <?php if (!empty($receipt['header'])): ?>
+            <div class="receipt__header-text"><?= nl2br($escaper->escapeHtml((string)$receipt['header'])) ?></div>
+        <?php endif; ?>
+    </header>
+
+    <div class="receipt__rule"></div>
+
+    <dl class="receipt__meta">
+        <?php if (!empty($receipt['register_name'])): ?>
+            <div class="receipt__meta-row">
+                <dt><?= $escaper->escapeHtml(__('Register')) ?></dt>
+                <dd><?= $escaper->escapeHtml((string)$receipt['register_name']) ?></dd>
+            </div>
+        <?php endif; ?>
+        <?php if (!empty($receipt['cashier_name'])): ?>
+            <div class="receipt__meta-row">
+                <dt><?= $escaper->escapeHtml(__('Cashier')) ?></dt>
+                <dd><?= $escaper->escapeHtml((string)$receipt['cashier_name']) ?></dd>
+            </div>
+        <?php endif; ?>
+        <div class="receipt__meta-row">
+            <dt><?= $escaper->escapeHtml(__('Receipt #')) ?></dt>
+            <dd><?= $escaper->escapeHtml((string)($receipt['receipt_number'] ?? '')) ?></dd>
+        </div>
+        <div class="receipt__meta-row">
+            <dt><?= $escaper->escapeHtml(__('Order #')) ?></dt>
+            <dd><?= $escaper->escapeHtml((string)($receipt['increment_id'] ?? '')) ?></dd>
+        </div>
+        <div class="receipt__meta-row">
+            <dt><?= $escaper->escapeHtml(__('Date')) ?></dt>
+            <dd><?= $escaper->escapeHtml((string)($receipt['date'] ?? '')) ?></dd>
+        </div>
+        <?php if (!empty($receipt['customer_name'])): ?>
+            <div class="receipt__meta-row">
+                <dt><?= $escaper->escapeHtml(__('Customer')) ?></dt>
+                <dd><?= $escaper->escapeHtml((string)$receipt['customer_name']) ?></dd>
+            </div>
+        <?php endif; ?>
+    </dl>
+
+    <div class="receipt__rule"></div>
+
+    <table class="receipt__items">
+        <tbody>
+        <?php foreach ($items as $item): ?>
+            <tr class="receipt__item-name-row">
+                <td colspan="2">
+                    <?= $escaper->escapeHtml((string)($item['name'] ?? '')) ?>
+                    <?php if (!empty($item['is_custom'])): ?>
+                        <span class="receipt__custom-flag"><?= $escaper->escapeHtml(__('(custom)')) ?></span>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php /* Item 39: chosen options (configurable attributes, bundle
+                selections, custom option values) under the product name.
+                Reuses the receipt__item-note-row look from receipt.css. */ ?>
+            <?php foreach ((array)($item['options'] ?? []) as $option): ?>
+                <?php
+                $optionLabel = trim((string)($option['label'] ?? ''));
+                $optionValue = trim((string)($option['value'] ?? ''));
+                ?>
+                <?php if ($optionValue !== ''): ?>
+                    <tr class="receipt__item-note-row receipt__item-option-row">
+                        <td colspan="2">
+                            <?php if ($optionLabel !== ''): ?>
+                                <?= $escaper->escapeHtml($optionLabel) ?>:
+                            <?php endif; ?>
+                            <?= $escaper->escapeHtml($optionValue) ?>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+            <?php endforeach; ?>
+            <tr class="receipt__item-qty-row">
+                <td class="receipt__item-qty">
+                    <?= $escaper->escapeHtml((string)($item['qty_formatted'] ?? '')) ?>
+                    &times;
+                    <?php if (!empty($item['original_price_formatted'])): ?>
+                        <span class="receipt__strike"><?= $escaper->escapeHtml((string)$item['original_price_formatted']) ?></span>
+                    <?php endif; ?>
+                    <?= $escaper->escapeHtml((string)($item['price_formatted'] ?? '')) ?>
+                </td>
+                <td class="receipt__amount"><?= $escaper->escapeHtml((string)($item['row_total_formatted'] ?? '')) ?></td>
+            </tr>
+            <?php if (!empty($item['discount_formatted'])): ?>
+                <tr class="receipt__item-discount-row">
+                    <td><?= $escaper->escapeHtml(__('Discount')) ?></td>
+                    <td class="receipt__amount"><?= $escaper->escapeHtml((string)$item['discount_formatted']) ?></td>
+                </tr>
+            <?php endif; ?>
+            <?php if (!empty($item['note'])): ?>
+                <tr class="receipt__item-note-row">
+                    <td colspan="2"><?= $escaper->escapeHtml((string)$item['note']) ?></td>
+                </tr>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+
+    <div class="receipt__rule"></div>
+
+    <table class="receipt__totals">
+        <tbody>
+        <tr>
+            <td><?= $escaper->escapeHtml(__('Subtotal')) ?></td>
+            <td class="receipt__amount"><?= $escaper->escapeHtml((string)($totals['subtotal_formatted'] ?? '')) ?></td>
+        </tr>
+        <?php if (!empty($totals['discount_formatted'])): ?>
+            <tr>
+                <td><?= $escaper->escapeHtml(__('Discount')) ?></td>
+                <td class="receipt__amount"><?= $escaper->escapeHtml((string)$totals['discount_formatted']) ?></td>
+            </tr>
+        <?php endif; ?>
+        <?php if (!empty($receipt['show_tax_breakdown']) && $taxBreakdown !== []): ?>
+            <?php foreach ($taxBreakdown as $taxRow): ?>
+                <tr class="receipt__tax-row">
+                    <td><?= $escaper->escapeHtml((string)($taxRow['label'] ?? '')) ?></td>
+                    <td class="receipt__amount"><?= $escaper->escapeHtml((string)($taxRow['amount_formatted'] ?? '')) ?></td>
+                </tr>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <tr>
+                <td><?= $escaper->escapeHtml(__('Tax')) ?></td>
+                <td class="receipt__amount"><?= $escaper->escapeHtml((string)($totals['tax_formatted'] ?? '')) ?></td>
+            </tr>
+        <?php endif; ?>
+        <?php if (!empty($totals['shipping_formatted'])): ?>
+            <tr>
+                <td><?= $escaper->escapeHtml(__('Shipping')) ?></td>
+                <td class="receipt__amount"><?= $escaper->escapeHtml((string)$totals['shipping_formatted']) ?></td>
+            </tr>
+        <?php endif; ?>
+        <?php if (!empty($totals['adjustment_formatted'])): ?>
+            <tr>
+                <td><?= $escaper->escapeHtml(__('Other charges')) ?></td>
+                <td class="receipt__amount"><?= $escaper->escapeHtml((string)$totals['adjustment_formatted']) ?></td>
+            </tr>
+        <?php endif; ?>
+        <tr class="receipt__grand-total">
+            <td><?= $escaper->escapeHtml(__('Total')) ?></td>
+            <td class="receipt__amount"><?= $escaper->escapeHtml((string)($totals['grand_total_formatted'] ?? '')) ?></td>
+        </tr>
+        </tbody>
+    </table>
+
+    <?php if ($payments !== []): ?>
+        <div class="receipt__rule"></div>
+        <table class="receipt__payments">
+            <tbody>
+            <?php foreach ($payments as $payment): ?>
+                <tr>
+                    <td>
+                        <?= $escaper->escapeHtml((string)($payment['method_title'] ?? '')) ?>
+                        <?php if (!empty($payment['reference'])): ?>
+                            <span class="receipt__reference">(<?= $escaper->escapeHtml((string)$payment['reference']) ?>)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="receipt__amount"><?= $escaper->escapeHtml((string)($payment['amount_formatted'] ?? '')) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            <?php if (!empty($receipt['change_due_formatted'])): ?>
+                <tr class="receipt__change-row">
+                    <td><?= $escaper->escapeHtml(__('Change')) ?></td>
+                    <td class="receipt__amount"><?= $escaper->escapeHtml((string)$receipt['change_due_formatted']) ?></td>
+                </tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+
+    <?php if (!empty($receipt['note'])): ?>
+        <div class="receipt__rule"></div>
+        <div class="receipt__order-note"><?= nl2br($escaper->escapeHtml((string)$receipt['note'])) ?></div>
+    <?php endif; ?>
+
+    <div class="receipt__rule"></div>
+
+    <footer class="receipt__footer">
+        <?php if (!empty($receipt['footer'])): ?>
+            <div class="receipt__footer-text"><?= nl2br($escaper->escapeHtml((string)$receipt['footer'])) ?></div>
+        <?php endif; ?>
+        <div class="receipt__footer-id"><?= $escaper->escapeHtml((string)($receipt['increment_id'] ?? '')) ?></div>
+    </footer>
+</div>
+<?php if ($autoPrint): ?>
+<script>
+    window.addEventListener('load', function () {
+        window.print();
+    });
+</script>
+<?php endif; ?>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * POS terminal - catalog panel: search bar (leading icon) + hidden barcode
+ * wedge buffer, pastel 2-level category chips (deterministic --tile-color by
+ * id), image-forward product grid with skeleton shimmer, friendly empty
+ * states, camera scan (BarcodeDetector). Infinite scroll hooks the panel
+ * body's scroll event (the page itself never scrolls), with a "Load more"
+ * fallback button, a subtle next-page loader and a hairline end-of-results
+ * marker (UI-fix contract item 28). Styled exclusively with pos.css classes;
+ * icons from the #pi-* sprite.
+ *
+ * Compact-card geometry (Round-1 fix, 2026-06-12): at the shipped default
+ * layout the grid viewport below search + chips + section title is ~174px
+ * (1280x800) / ~154px (1366x768) while a card measured ~243px, so no
+ * complete row was visible without scrolling. Token-based inline tuning
+ * (this template only - pos.css is another agent's file): tighter chip-row
+ * + section-title + grid-top rhythm (~26px reclaimed), denser auto-FILL
+ * columns (118px min; auto-fill - never auto-fit, see UIFIX item 31: it
+ * keeps empty tracks so a lone result stays one tile, not a billboard),
+ * artwork capped at 88px (4:3 still rules until the
+ * cap bites), sku folded onto the price row, stock badges lifted out of
+ * flow onto the artwork. Net card ≈176px -> ≥1 full product row visible at
+ * both 1280x800 and 1366x768 before any scrolling; the panel body remains
+ * the one scroll region (item 9) and the infinite-scroll target.
+ *
+ * Each product card carries two corner affordances distinct from the
+ * tap-to-add surface (UI-fix contract items 20/23): a quick-view button
+ * (pi-search -> $store.posProduct modal) and, for cashiers with
+ * can_edit_layout, a pin/unpin star (pi-star -> pos/catalog/quickkeySave /
+ * quickkeyRemove for the current register).
+ *
+ * Items 34 + 36 (all product types / footer): composite (configurable/
+ * grouped/bundle) and custom-option cards show "From <price>" as the full
+ * price line plus a compact glyph-chip "Options" line beneath it
+ * (.pos-product-card__footer - never the old side-by-side badge that
+ * truncated to "Optio..."); a tap opens the options modal ($store.posOptions
+ * -> modal-options.phtml) instead of the one-tap add - the server prices
+ * the real quote. Simple products keep the plain one-row price + sku.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<section class="pos-panel pos-panel--catalog"
+         id="pos-panel-catalog"
+         data-panel="catalog"
+         x-data="posCatalog()"
+         x-cloak>
+    <header class="pos-panel__header" data-drag-handle>
+        <span class="pos-panel__drag" aria-hidden="true"></span>
+        <span class="pos-panel__title"><?= $escaper->escapeHtml(__('Catalog')) ?></span>
+        <div class="pos-panel__actions">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost pos-btn--icon"
+                    x-show="cameraSupported"
+                    @click="openCamera()"
+                    title="<?= $escaper->escapeHtmlAttr(__('Scan barcode with camera')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-scan"/></svg>
+                <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Scan')) ?></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="pos-panel__body" @scroll.passive="onScroll($event)">
+        <div class="pos-search">
+            <span class="pos-search__icon" aria-hidden="true">
+                <svg class="pos-icon"><use href="#pi-search"/></svg>
+            </span>
+            <input type="search"
+                   class="pos-input"
+                   x-ref="searchInput"
+                   x-model="query"
+                   @input.debounce.250ms="searchNow()"
+                   @keydown.enter.prevent="searchEnter()"
+                   autocomplete="off"
+                   spellcheck="false"
+                   placeholder="<?= $escaper->escapeHtmlAttr(__('Search products, SKU or scan... ( / )')) ?>"
+                   aria-label="<?= $escaper->escapeHtmlAttr(__('Search products')) ?>">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost"
+                    x-show="query.length > 0"
+                    @click="clearSearch(); $refs.searchInput.focus()"
+                    aria-label="<?= $escaper->escapeHtmlAttr(__('Clear search')) ?>">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+            </button>
+        </div>
+        <!-- Hidden keyboard-wedge barcode buffer: stray fast keystrokes are
+             routed here and Enter triggers the barcode lookup. -->
+        <input type="text"
+               class="pos-barcode-input"
+               x-ref="barcodeBuffer"
+               @keydown.enter.prevent="submitBuffer()"
+               @input="onBufferInput()"
+               tabindex="-1"
+               autocomplete="off"
+               aria-hidden="true">
+
+        <div class="pos-category-chips" role="tablist" style="padding:var(--pos-sp-1) 0;">
+            <button type="button"
+                    class="pos-category-chip"
+                    style="min-height:var(--pos-control-h);min-width:48px;"
+                    :class="{ 'pos-category-chip--active': !categoryId && mode !== 'search' }"
+                    @click="clearCategory()"><?= $escaper->escapeHtml(__('All')) ?></button>
+            <?php // "All"/empty query shows Top Sellers - instant active state on tap (contract item 10). ?>
+            <template x-for="cat in categories" :key="cat.id">
+                <button type="button"
+                        class="pos-category-chip"
+                        :class="{ 'pos-category-chip--active': parentId === cat.id || categoryId === cat.id }"
+                        :style="'min-height:var(--pos-control-h);min-width:48px;--tile-color:' + (typeof chipColor === 'function' ? chipColor(cat.id) : ['#4f6df5','#0ea5a4','#e0793c','#9657d6','#d6526f','#3c8f4e','#b08f26','#5577a0'][(Number(cat.id) || 0) % 8])"
+                        @click="selectCategory(cat)"
+                        x-text="cat.name"></button>
+            </template>
+        </div>
+        <div class="pos-category-chips" x-show="subChips.length > 0" role="tablist" style="padding:var(--pos-sp-1) 0;">
+            <template x-for="sub in subChips" :key="sub.id">
+                <button type="button"
+                        class="pos-category-chip"
+                        :class="{ 'pos-category-chip--active': categoryId === sub.id }"
+                        :style="'min-height:var(--pos-control-h);min-width:48px;--tile-color:' + (typeof chipColor === 'function' ? chipColor(sub.id) : ['#4f6df5','#0ea5a4','#e0793c','#9657d6','#d6526f','#3c8f4e','#b08f26','#5577a0'][(Number(sub.id) || 0) % 8])"
+                        @click="selectCategory(sub, true)"
+                        x-text="sub.name"></button>
+            </template>
+        </div>
+
+        <!-- Section label over the grid: Top sellers / category / search results -->
+        <div class="pos-section-title"
+             style="margin-top:var(--pos-sp-2);"
+             x-show="products.length > 0 && gridLabel() !== ''"
+             x-text="gridLabel()"></div>
+
+        <?php /* Denser column minimum + tighter top padding (Round-1 fix):
+                 narrower columns shorten the 4:3 artwork so a full card row
+                 fits the default-layout grid viewport at 1280x800/1366x768.
+                 auto-FILL, never auto-fit (UIFIX item 31): auto-fit collapses
+                 the empty tracks, so a lone search/category result stretched
+                 into a full-row billboard; auto-fill keeps the tracks and the
+                 single card stays one normal left-aligned tile. */ ?>
+        <div class="pos-product-grid"
+             x-show="products.length > 0"
+             style="grid-template-columns:repeat(auto-fill,minmax(min(118px,100%),1fr));padding-top:var(--pos-sp-1);">
+            <?php /* Card = div[role=button] (tap-to-add stays one tap) so the
+                     info + pin affordances can be real buttons inside it
+                     (contract items 20/23) - buttons cannot nest. */ ?>
+            <template x-for="p in products" :key="p.id">
+                <div class="pos-product-card"
+                     role="button"
+                     tabindex="0"
+                     :style="'position:relative;gap:var(--pos-sp-1);' + (p.in_stock === false ? 'opacity:.55;' : '')"
+                     :aria-label="p.name"
+                     @click="addToCart(p)"
+                     @keydown.enter.prevent="addToCart(p)"
+                     @keydown.space.prevent="addToCart(p)">
+                    <!-- Corner affordances: quick view (always) + pin (can_edit_layout) -->
+                    <span class="pos-product-card__actions"
+                          style="position:absolute;top:var(--pos-sp-2);right:var(--pos-sp-2);display:inline-flex;z-index:2;">
+                        <button type="button"
+                                class="pos-quickkeys__pager-btn pos-product-card__action pos-product-card__action--info"
+                                @click.stop="openDetail(p)"
+                                @keydown.enter.stop
+                                @keydown.space.stop
+                                :aria-label="'<?= $escaper->escapeJs(__('View details')) ?>: ' + p.name"
+                                title="<?= $escaper->escapeHtmlAttr(__('Product details')) ?>">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-search"/></svg>
+                        </button>
+                        <button type="button"
+                                x-show="canPin()"
+                                class="pos-quickkeys__pager-btn pos-product-card__action pos-product-card__action--pin"
+                                :class="{ 'is-pinned': isPinned(p) }"
+                                :style="isPinned(p) ? 'color:var(--pos-accent-ink);border-color:var(--pos-accent);background:var(--pos-accent-soft);' : ''"
+                                :disabled="pinBusy"
+                                @click.stop="togglePin(p)"
+                                @keydown.enter.stop
+                                @keydown.space.stop
+                                :aria-pressed="isPinned(p) ? 'true' : 'false'"
+                                :aria-label="(isPinned(p) ? '<?= $escaper->escapeJs(__('Unpin from Quick Keys')) ?>' : '<?= $escaper->escapeJs(__('Pin to Quick Keys')) ?>') + ': ' + p.name"
+                                :title="isPinned(p) ? '<?= $escaper->escapeJs(__('Unpin from Quick Keys')) ?>' : '<?= $escaper->escapeJs(__('Pin to Quick Keys')) ?>'">
+                            <svg class="pos-icon pos-icon--sm" aria-hidden="true" focusable="false"><use href="#pi-star"/></svg>
+                        </button>
+                    </span>
+                    <template x-if="p.image">
+                        <img class="pos-product-card__image"
+                             :src="p.image"
+                             :alt="p.name"
+                             loading="lazy"
+                             style="max-height:calc(88px * var(--pos-font-scale));">
+                    </template>
+                    <template x-if="!p.image">
+                        <span class="pos-product-card__image pos-muted"
+                              aria-hidden="true"
+                              style="display:flex;align-items:center;justify-content:center;max-height:calc(88px * var(--pos-font-scale));">
+                            <svg class="pos-icon pos-icon--lg"><use href="#pi-tag"/></svg>
+                        </span>
+                    </template>
+                    <!-- Stock badges (MSI salable qty / legacy stock) - overlaid
+                         on the artwork (out of flow) so badge rows can never
+                         stretch the uniform card height. -->
+                    <template x-if="p.in_stock === false">
+                        <span class="pos-badge pos-badge--danger"
+                              style="position:absolute;top:var(--pos-sp-2);left:var(--pos-sp-2);z-index:1;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= $escaper->escapeHtml(__('Out of stock')) ?></span>
+                    </template>
+                    <template x-if="p.in_stock !== false && p.low_stock">
+                        <span class="pos-badge pos-badge--warning"
+                              style="position:absolute;top:var(--pos-sp-2);left:var(--pos-sp-2);z-index:1;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                              x-text="'<?= $escaper->escapeJs(__('Low')) ?> · ' + (p.salable_qty != null ? Math.floor(p.salable_qty) : '')"></span>
+                    </template>
+                    <span class="pos-product-card__name" x-text="p.name"></span>
+                    <!-- Footer (items 34 + 36): the price ROW owns the first
+                         line - pill ("From $X" on composites) + struck
+                         original + sku (simple only, ellipsized right) - and
+                         composite / custom-option cards add a compact
+                         glyph-chip "Options" line BELOW it, so neither the
+                         price nor the hint can ever squeeze or truncate at
+                         the compact card width. Tapping a composite card
+                         opens the options modal instead of one-tap add. -->
+                    <span class="pos-product-card__footer">
+                        <span class="pos-product-card__price-row">
+                            <span class="pos-product-card__price pos-amount"
+                                  x-text="(needsOptions(p) ? '<?= $escaper->escapeJs(__('From')) ?> ' : '') + money(p.price)"></span>
+                            <!-- Struck-through original when a rule/special/tier/group price discounts it -->
+                            <template x-if="p.original_price != null && !needsOptions(p)">
+                                <span class="pos-amount pos-product-card__original"
+                                      x-text="money(p.original_price)"></span>
+                            </template>
+                            <template x-if="!needsOptions(p)">
+                                <span class="pos-product-card__sku" x-text="p.sku"></span>
+                            </template>
+                        </span>
+                        <!-- Options chip (composites only; simple = plain price) -->
+                        <template x-if="needsOptions(p)">
+                            <span class="pos-product-card__options-hint">
+                                <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-settings"/></svg>
+                                <span><?= $escaper->escapeHtml(__('Options')) ?></span>
+                            </span>
+                        </template>
+                    </span>
+                </div>
+            </template>
+        </div>
+
+        <!-- Skeleton shimmer while the first page loads (mirrors the live
+             compact-card geometry so the reveal doesn't reflow; auto-FILL to
+             match the live grid - UIFIX item 31) -->
+        <div class="pos-product-grid"
+             x-show="busy && products.length === 0"
+             aria-hidden="true"
+             style="grid-template-columns:repeat(auto-fill,minmax(min(118px,100%),1fr));padding-top:var(--pos-sp-1);">
+            <template x-for="i in 8" :key="i">
+                <div class="pos-product-card" style="gap:var(--pos-sp-1);">
+                    <span class="pos-product-card__image pos-skeleton"
+                          style="max-height:calc(88px * var(--pos-font-scale));"></span>
+                    <span class="pos-product-card__name pos-skeleton">&nbsp;</span>
+                    <span class="pos-product-card__sku pos-skeleton">&nbsp;</span>
+                </div>
+            </template>
+        </div>
+
+        <?php /* x-show strips an inline display on reveal, so the toggled
+                 wrappers below stay display-neutral (text-align centering /
+                 an inner flex row) - never inline flex on the x-show node. */ ?>
+        <!-- Subtle next-page loader (infinite scroll, contract item 28) -->
+        <div x-show="busy && products.length > 0"
+             role="status"
+             style="text-align:center;padding:var(--pos-sp-3) 0;">
+            <span style="display:inline-flex;align-items:center;gap:var(--pos-sp-2);">
+                <span class="pos-spinner" aria-hidden="true" style="width:18px;height:18px;border-width:2px;"></span>
+                <span class="pos-muted" style="font-size:var(--pos-fs-sm);"><?= $escaper->escapeHtml(__('Loading more...')) ?></span>
+            </span>
+        </div>
+
+        <!-- "Load more" fallback button - infinite scroll on the panel body
+             stays primary; this is the explicit path (contract item 28). -->
+        <div x-show="canLoadMore()"
+             style="text-align:center;padding:var(--pos-sp-2) 0 var(--pos-sp-4);">
+            <button type="button"
+                    class="pos-btn pos-btn--ghost pos-btn--sm"
+                    @click="fetchMore()">
+                <svg class="pos-icon pos-icon--sm" aria-hidden="true"><use href="#pi-chevron-down"/></svg>
+                <span x-text="loadMoreLabel()"></span>
+            </button>
+        </div>
+
+        <!-- End of results: quiet hairline marker once the list has truly
+             paged out (contract item 28). -->
+        <div x-show="showEnd()"
+             aria-hidden="true"
+             style="padding:var(--pos-sp-3) var(--pos-sp-2) var(--pos-sp-4);">
+            <span style="display:flex;align-items:center;gap:var(--pos-sp-3);">
+                <span class="pos-divider" style="flex:1;margin:0;"></span>
+                <span class="pos-muted"
+                      style="font-size:var(--pos-fs-xs);white-space:nowrap;letter-spacing:.04em;"
+                      x-text="endLabel()"></span>
+                <span class="pos-divider" style="flex:1;margin:0;"></span>
+            </span>
+        </div>
+
+        <!-- Genuinely-empty category: friendly state + top-sellers escape hatch (contract item 10) -->
+        <div class="pos-empty" x-show="!busy && mode === 'category' && done && emptyCategory && products.length === 0">
+            <span class="pos-empty__icon" aria-hidden="true">
+                <svg class="pos-icon"><use href="#pi-empty-search"/></svg>
+            </span>
+            <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No sellable products in this category yet.')) ?></span>
+            <button type="button" class="pos-btn pos-btn--primary pos-btn--sm" @click="showTopSellers()">
+                <svg class="pos-icon" aria-hidden="true"><use href="#pi-star"/></svg>
+                <span><?= $escaper->escapeHtml(__('Show top sellers instead')) ?></span>
+            </button>
+        </div>
+        <!-- Search with no matches -->
+        <div class="pos-empty" x-show="!busy && mode === 'search' && done && products.length === 0">
+            <span class="pos-empty__icon" aria-hidden="true">
+                <svg class="pos-icon"><use href="#pi-empty-search"/></svg>
+            </span>
+            <span class="pos-empty__text"><?= $escaper->escapeHtml(__('No products found.')) ?></span>
+        </div>
+        <!-- Top sellers empty (brand-new store with no products at all) -->
+        <div class="pos-empty" x-show="!busy && mode === 'top' && done && products.length === 0">
+            <span class="pos-empty__icon" aria-hidden="true">
+                <svg class="pos-icon"><use href="#pi-empty-search"/></svg>
+            </span>
+            <span class="pos-empty__text"><?= $escaper->escapeHtml(__('Search or scan a barcode to add products.')) ?></span>
+        </div>
+    </div>
+
+    <!-- Camera scan overlay (modal chrome from pos.css) -->
+    <div class="pos-modal-backdrop" x-show="cameraOpen" @click.self="closeCamera()" x-cloak>
+        <div class="pos-modal pos-modal--md"
+             role="dialog"
+             aria-modal="true"
+             aria-label="<?= $escaper->escapeHtmlAttr(__('Scan barcode with camera')) ?>">
+            <header class="pos-modal__header">
+                <span class="pos-modal__title"><?= $escaper->escapeHtml(__('Scan barcode')) ?></span>
+                <button type="button"
+                        class="pos-modal__close"
+                        @click="closeCamera()"
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('Close')) ?>">
+                    <svg class="pos-icon" aria-hidden="true"><use href="#pi-x"/></svg>
+                </button>
+            </header>
+            <div class="pos-modal__body">
+                <video x-ref="video"
+                       playsinline
+                       muted
+                       style="width:100%;aspect-ratio:4/3;object-fit:cover;background:#000;border-radius:12px;"></video>
+                <p class="pos-muted"><?= $escaper->escapeHtml(__('Point the camera at a barcode')) ?></p>
+            </div>
+            <footer class="pos-modal__footer">
+                <button type="button" class="pos-btn pos-btn--danger" @click="closeCamera()">
+                    <?= $escaper->escapeHtml(__('Cancel')) ?>
+                </button>
+            </footer>
+        </div>
+    </div>
+</section>

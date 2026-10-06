@@ -1,0 +1,287 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Panth_MagePos
+ *
+ * @category  Panth
+ * @package   Panth_MagePos
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <!-- ============================================================ -->
+    <!-- Api Data interface preferences                               -->
+    <!-- ============================================================ -->
+    <preference for="Panth\MagePos\Api\Data\RegisterInterface" type="Panth\MagePos\Model\Register"/>
+    <preference for="Panth\MagePos\Api\Data\PosUserInterface" type="Panth\MagePos\Model\PosUser"/>
+    <preference for="Panth\MagePos\Api\Data\RoleInterface" type="Panth\MagePos\Model\Role"/>
+    <preference for="Panth\MagePos\Api\Data\SessionInterface" type="Panth\MagePos\Model\Session"/>
+    <preference for="Panth\MagePos\Api\Data\CashMovementInterface" type="Panth\MagePos\Model\CashMovement"/>
+    <preference for="Panth\MagePos\Api\Data\PaymentMethodInterface" type="Panth\MagePos\Model\PaymentMethod"/>
+    <preference for="Panth\MagePos\Api\Data\PosOrderInterface" type="Panth\MagePos\Model\PosOrder"/>
+    <preference for="Panth\MagePos\Api\Data\PosOrderPaymentInterface" type="Panth\MagePos\Model\PosOrderPayment"/>
+    <preference for="Panth\MagePos\Api\Data\HoldInterface" type="Panth\MagePos\Model\Hold"/>
+    <preference for="Panth\MagePos\Api\Data\QuickKeyInterface" type="Panth\MagePos\Model\QuickKey"/>
+    <preference for="Panth\MagePos\Api\Data\UserPreferenceInterface" type="Panth\MagePos\Model\UserPreference"/>
+
+    <!-- ============================================================ -->
+    <!-- Api Repository interface preferences                         -->
+    <!-- ============================================================ -->
+    <preference for="Panth\MagePos\Api\RegisterRepositoryInterface" type="Panth\MagePos\Model\RegisterRepository"/>
+    <preference for="Panth\MagePos\Api\PosUserRepositoryInterface" type="Panth\MagePos\Model\PosUserRepository"/>
+    <preference for="Panth\MagePos\Api\RoleRepositoryInterface" type="Panth\MagePos\Model\RoleRepository"/>
+    <preference for="Panth\MagePos\Api\SessionRepositoryInterface" type="Panth\MagePos\Model\SessionRepository"/>
+    <preference for="Panth\MagePos\Api\CashMovementRepositoryInterface" type="Panth\MagePos\Model\CashMovementRepository"/>
+    <preference for="Panth\MagePos\Api\PaymentMethodRepositoryInterface" type="Panth\MagePos\Model\PaymentMethodRepository"/>
+    <preference for="Panth\MagePos\Api\PosOrderRepositoryInterface" type="Panth\MagePos\Model\PosOrderRepository"/>
+    <preference for="Panth\MagePos\Api\PosOrderPaymentRepositoryInterface" type="Panth\MagePos\Model\PosOrderPaymentRepository"/>
+    <preference for="Panth\MagePos\Api\HoldRepositoryInterface" type="Panth\MagePos\Model\HoldRepository"/>
+    <preference for="Panth\MagePos\Api\QuickKeyRepositoryInterface" type="Panth\MagePos\Model\QuickKeyRepository"/>
+    <preference for="Panth\MagePos\Api\UserPreferenceRepositoryInterface" type="Panth\MagePos\Model\UserPreferenceRepository"/>
+
+    <!-- ============================================================ -->
+    <!-- Payment method facade (offline adapter, code: panth_pos)     -->
+    <!-- ============================================================ -->
+    <virtualType name="PanthPosPaymentFacade" type="Magento\Payment\Model\Method\Adapter">
+        <arguments>
+            <argument name="code" xsi:type="string">panth_pos</argument>
+            <argument name="formBlockType" xsi:type="string">Magento\Payment\Block\Form</argument>
+            <argument name="infoBlockType" xsi:type="string">Magento\Payment\Block\Info</argument>
+            <argument name="valueHandlerPool" xsi:type="object">PanthPosPaymentValueHandlerPool</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="PanthPosPaymentValueHandlerPool" type="Magento\Payment\Gateway\Config\ValueHandlerPool">
+        <arguments>
+            <argument name="handlers" xsi:type="array">
+                <item name="default" xsi:type="string">PanthPosPaymentConfigValueHandler</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="PanthPosPaymentConfigValueHandler" type="Magento\Payment\Gateway\Config\ConfigValueHandler">
+        <arguments>
+            <argument name="configInterface" xsi:type="object">PanthPosPaymentConfig</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="PanthPosPaymentConfig" type="Magento\Payment\Gateway\Config\Config">
+        <arguments>
+            <argument name="methodCode" xsi:type="string">panth_pos</argument>
+        </arguments>
+    </virtualType>
+
+    <!-- ============================================================ -->
+    <!-- Online payment processor extension point                     -->
+    <!-- ============================================================ -->
+    <type name="Panth\MagePos\Model\Payment\ProcessorPool">
+        <arguments>
+            <argument name="processors" xsi:type="array"/>
+        </arguments>
+    </type>
+
+    <!-- ============================================================ -->
+    <!-- MSI (multi-source inventory) + quick-key wiring for          -->
+    <!-- CatalogService                                                -->
+    <!--                                                              -->
+    <!-- The optional MSI constructor args default to null and are    -->
+    <!-- NOT auto-filled by the ObjectManager, so without this the    -->
+    <!-- service silently uses the legacy cataloginventory path and   -->
+    <!-- isMsiActive() is always false (UI-fix contract item 17).     -->
+    <!-- The referenced classes are @api interfaces from the          -->
+    <!-- Magento_Inventory* packages; this wiring activates the MSI    -->
+    <!-- salable-qty path when those modules are installed. On stores  -->
+    <!-- without MSI the services resolve to null and the service      -->
+    <!-- falls back to cataloginventory (additive, migration-safe).   -->
+    <!--                                                              -->
+    <!-- quickKeyRepository/quickKeyFactory are likewise optional and  -->
+    <!-- must be wired explicitly or terminal quick-key pin/unpin      -->
+    <!-- (quickKeySave/quickKeyRemove, contract item 20) always throws -->
+    <!-- "Quick keys are not available.".                              -->
+    <!-- ============================================================ -->
+    <type name="Panth\MagePos\Service\CatalogService">
+        <arguments>
+            <argument name="registerRepository" xsi:type="object">Panth\MagePos\Api\RegisterRepositoryInterface</argument>
+            <argument name="getProductSalableQty" xsi:type="object">Magento\InventorySalesApi\Api\GetProductSalableQtyInterface</argument>
+            <argument name="getStockBySalesChannel" xsi:type="object">Magento\InventorySalesApi\Api\GetStockBySalesChannelInterface</argument>
+            <argument name="getStockSourceLinks" xsi:type="object">Magento\InventoryApi\Api\GetStockSourceLinksInterface</argument>
+            <argument name="defaultStockProvider" xsi:type="object">Magento\InventoryCatalogApi\Api\DefaultStockProviderInterface</argument>
+            <argument name="searchCriteriaBuilder" xsi:type="object">Magento\Framework\Api\SearchCriteriaBuilder</argument>
+            <argument name="salesChannelFactory" xsi:type="object">Magento\InventorySalesApi\Api\Data\SalesChannelInterfaceFactory</argument>
+            <argument name="quickKeyRepository" xsi:type="object">Panth\MagePos\Api\QuickKeyRepositoryInterface</argument>
+            <argument name="quickKeyFactory" xsi:type="object">Panth\MagePos\Api\Data\QuickKeyInterfaceFactory</argument>
+        </arguments>
+    </type>
+
+    <!-- ============================================================ -->
+    <!-- Admin grid data sources + sales_order_grid POS columns join  -->
+    <!-- ============================================================ -->
+    <type name="Magento\Framework\View\Element\UiComponent\DataProvider\CollectionFactory">
+        <arguments>
+            <argument name="collections" xsi:type="array">
+                <item name="panth_pos_register_listing_data_source" xsi:type="string">Panth\MagePos\Model\ResourceModel\Register\Grid\Collection</item>
+                <item name="panth_pos_session_listing_data_source" xsi:type="string">Panth\MagePos\Model\ResourceModel\Session\Grid\Collection</item>
+                <item name="panth_pos_user_listing_data_source" xsi:type="string">Panth\MagePos\Model\ResourceModel\PosUser\Grid\Collection</item>
+                <item name="panth_pos_role_listing_data_source" xsi:type="string">Panth\MagePos\Model\ResourceModel\Role\Grid\Collection</item>
+                <item name="panth_pos_method_listing_data_source" xsi:type="string">Panth\MagePos\Model\ResourceModel\PaymentMethod\Grid\Collection</item>
+                <item name="panth_pos_quickkey_listing_data_source" xsi:type="string">Panth\MagePos\Model\ResourceModel\QuickKey\Grid\Collection</item>
+            </argument>
+        </arguments>
+        <plugin name="panth_pos_sales_order_grid" type="Panth\MagePos\Plugin\SalesOrderGridCollectionPlugin"/>
+    </type>
+
+    <virtualType name="Panth\MagePos\Ui\RegisterGridFulltextFilter" type="Panth\MagePos\Ui\Component\Listing\LikeFulltextFilter">
+        <arguments>
+            <argument name="columns" xsi:type="array">
+                <item name="main_table_name" xsi:type="string">main_table.name</item>
+                <item name="main_table_code" xsi:type="string">main_table.code</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\RegisterGridFilterPool" type="Magento\Framework\View\Element\UiComponent\DataProvider\FilterPool">
+        <arguments>
+            <argument name="appliers" xsi:type="array">
+                <item name="regular" xsi:type="object">Magento\Framework\View\Element\UiComponent\DataProvider\RegularFilter</item>
+                <item name="fulltext" xsi:type="object">Panth\MagePos\Ui\RegisterGridFulltextFilter</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\RegisterGridReporting" type="Magento\Framework\View\Element\UiComponent\DataProvider\Reporting">
+        <arguments>
+            <argument name="filterPool" xsi:type="object">Panth\MagePos\Ui\RegisterGridFilterPool</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\RegisterGridDataProvider" type="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider">
+        <arguments>
+            <argument name="reporting" xsi:type="object">Panth\MagePos\Ui\RegisterGridReporting</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\SessionGridFulltextFilter" type="Panth\MagePos\Ui\Component\Listing\LikeFulltextFilter">
+        <arguments>
+            <argument name="columns" xsi:type="array">
+                <item name="register_name" xsi:type="string">register.name</item>
+                <item name="pos_user_name" xsi:type="string">pos_user.name</item>
+                <item name="main_table_status" xsi:type="string">main_table.status</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\SessionGridFilterPool" type="Magento\Framework\View\Element\UiComponent\DataProvider\FilterPool">
+        <arguments>
+            <argument name="appliers" xsi:type="array">
+                <item name="regular" xsi:type="object">Magento\Framework\View\Element\UiComponent\DataProvider\RegularFilter</item>
+                <item name="fulltext" xsi:type="object">Panth\MagePos\Ui\SessionGridFulltextFilter</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\SessionGridReporting" type="Magento\Framework\View\Element\UiComponent\DataProvider\Reporting">
+        <arguments>
+            <argument name="filterPool" xsi:type="object">Panth\MagePos\Ui\SessionGridFilterPool</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\SessionGridDataProvider" type="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider">
+        <arguments>
+            <argument name="reporting" xsi:type="object">Panth\MagePos\Ui\SessionGridReporting</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\UserGridFulltextFilter" type="Panth\MagePos\Ui\Component\Listing\LikeFulltextFilter">
+        <arguments>
+            <argument name="columns" xsi:type="array">
+                <item name="main_table_username" xsi:type="string">main_table.username</item>
+                <item name="main_table_name" xsi:type="string">main_table.name</item>
+                <item name="main_table_email" xsi:type="string">main_table.email</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\UserGridFilterPool" type="Magento\Framework\View\Element\UiComponent\DataProvider\FilterPool">
+        <arguments>
+            <argument name="appliers" xsi:type="array">
+                <item name="regular" xsi:type="object">Magento\Framework\View\Element\UiComponent\DataProvider\RegularFilter</item>
+                <item name="fulltext" xsi:type="object">Panth\MagePos\Ui\UserGridFulltextFilter</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\UserGridReporting" type="Magento\Framework\View\Element\UiComponent\DataProvider\Reporting">
+        <arguments>
+            <argument name="filterPool" xsi:type="object">Panth\MagePos\Ui\UserGridFilterPool</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\UserGridDataProvider" type="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider">
+        <arguments>
+            <argument name="reporting" xsi:type="object">Panth\MagePos\Ui\UserGridReporting</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\RoleGridFulltextFilter" type="Panth\MagePos\Ui\Component\Listing\LikeFulltextFilter">
+        <arguments>
+            <argument name="columns" xsi:type="array">
+                <item name="main_table_name" xsi:type="string">main_table.name</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\RoleGridFilterPool" type="Magento\Framework\View\Element\UiComponent\DataProvider\FilterPool">
+        <arguments>
+            <argument name="appliers" xsi:type="array">
+                <item name="regular" xsi:type="object">Magento\Framework\View\Element\UiComponent\DataProvider\RegularFilter</item>
+                <item name="fulltext" xsi:type="object">Panth\MagePos\Ui\RoleGridFulltextFilter</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\RoleGridReporting" type="Magento\Framework\View\Element\UiComponent\DataProvider\Reporting">
+        <arguments>
+            <argument name="filterPool" xsi:type="object">Panth\MagePos\Ui\RoleGridFilterPool</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\RoleGridDataProvider" type="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider">
+        <arguments>
+            <argument name="reporting" xsi:type="object">Panth\MagePos\Ui\RoleGridReporting</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\MethodGridFulltextFilter" type="Panth\MagePos\Ui\Component\Listing\LikeFulltextFilter">
+        <arguments>
+            <argument name="columns" xsi:type="array">
+                <item name="main_table_code" xsi:type="string">main_table.code</item>
+                <item name="main_table_title" xsi:type="string">main_table.title</item>
+                <item name="main_table_type" xsi:type="string">main_table.type</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\MethodGridFilterPool" type="Magento\Framework\View\Element\UiComponent\DataProvider\FilterPool">
+        <arguments>
+            <argument name="appliers" xsi:type="array">
+                <item name="regular" xsi:type="object">Magento\Framework\View\Element\UiComponent\DataProvider\RegularFilter</item>
+                <item name="fulltext" xsi:type="object">Panth\MagePos\Ui\MethodGridFulltextFilter</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\MethodGridReporting" type="Magento\Framework\View\Element\UiComponent\DataProvider\Reporting">
+        <arguments>
+            <argument name="filterPool" xsi:type="object">Panth\MagePos\Ui\MethodGridFilterPool</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\MethodGridDataProvider" type="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider">
+        <arguments>
+            <argument name="reporting" xsi:type="object">Panth\MagePos\Ui\MethodGridReporting</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\QuickkeyGridFulltextFilter" type="Panth\MagePos\Ui\Component\Listing\LikeFulltextFilter">
+        <arguments>
+            <argument name="columns" xsi:type="array">
+                <item name="main_table_label" xsi:type="string">main_table.label</item>
+                <item name="main_table_color" xsi:type="string">main_table.color</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\QuickkeyGridFilterPool" type="Magento\Framework\View\Element\UiComponent\DataProvider\FilterPool">
+        <arguments>
+            <argument name="appliers" xsi:type="array">
+                <item name="regular" xsi:type="object">Magento\Framework\View\Element\UiComponent\DataProvider\RegularFilter</item>
+                <item name="fulltext" xsi:type="object">Panth\MagePos\Ui\QuickkeyGridFulltextFilter</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\QuickkeyGridReporting" type="Magento\Framework\View\Element\UiComponent\DataProvider\Reporting">
+        <arguments>
+            <argument name="filterPool" xsi:type="object">Panth\MagePos\Ui\QuickkeyGridFilterPool</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Panth\MagePos\Ui\QuickkeyGridDataProvider" type="Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider">
+        <arguments>
+            <argument name="reporting" xsi:type="object">Panth\MagePos\Ui\QuickkeyGridReporting</argument>
+        </arguments>
+    </virtualType>
+</config>

@@ -1,0 +1,80 @@
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * MagePos "Tactile Console" - bundled webfonts (offline-safe, zero external requests).
+ *
+ * Display / numbers : "Bricolage Grotesque" 400 / 600 / 800 (latin subset)
+ * Body / UI         : "Schibsted Grotesk"  400 / 500 / 700 (latin subset)
+ *
+ * All files ship inside the module under view/frontend/web/fonts/ and are
+ * referenced relatively so Magento static-content deploy resolves them on
+ * any theme (Hyva + Luma). font-display: swap ⇒ system stack renders first.
+ *
+ * NOTE: terminal.phtml preloads the critical files AND warms all six faces
+ * via document.fonts.load() at boot - faces the shell does not paint at boot
+ * (Bricolage 400, Schibsted 500) would otherwise stay "unloaded" and
+ * document.fonts.check() at the default weight would report false.
+ */
+
+/* ---- Bricolage Grotesque - display, money, keypad ---- */
+
+@font-face {
+    font-family: 'Bricolage Grotesque';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/bricolage-grotesque-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Bricolage Grotesque';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../fonts/bricolage-grotesque-600.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Bricolage Grotesque';
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url('../fonts/bricolage-grotesque-800.woff2') format('woff2');
+}
+
+/* ---- Schibsted Grotesk - body, labels, lists, inputs ---- */
+
+@font-face {
+    font-family: 'Schibsted Grotesk';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/schibsted-grotesk-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Schibsted Grotesk';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/schibsted-grotesk-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Schibsted Grotesk';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/schibsted-grotesk-700.woff2') format('woff2');
+}
+
+/* ---- Font stacks (consumed by pos.css design tokens) ----
+ * Full system fallback: if a woff2 fails to load (or is stripped from a
+ * deploy), the UI degrades gracefully to the platform sans stack.
+ */
+:root {
+    --pos-font-display: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont,
+        'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --pos-font-body: 'Schibsted Grotesk', -apple-system, BlinkMacSystemFont,
+        'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}

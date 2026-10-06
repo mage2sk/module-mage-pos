@@ -1,0 +1,160 @@
+<?php
+/**
+ * Copyright © Panth Infotech. All rights reserved.
+ *
+ * Terminal header (spec §9): store/register/cashier info, session status
+ * chip, online/offline indicator and the action buttons (holds,
+ * orders/refund, session, settings, layout edit, lock, logout). All state
+ * lives in Alpine.store('pos') - see js/pos/app.js.
+ *
+ * UI-fix contract item 52: the header previously rendered a SECOND
+ * multi-cart tab strip ("Cart 1 / Cart 2") fed by app.js's own list
+ * (panth_pos_carts), which drifted out of sync with the canonical tabs in
+ * the SALE block. The canonical (and now only) cart tabs live in
+ * panel-cart.phtml, driven by the cart.js posCart() store
+ * (panth_pos_cart_tabs / panth_pos_cart_active). Do NOT reintroduce a tab
+ * list here unless it reads that same cart.js state.
+ *
+ * @var \Panth\MagePos\Block\Terminal $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+declare(strict_types=1);
+?>
+<style>
+    /*
+     * Header-scoped accessibility overrides (this template's owner may not
+     * edit pos.css). Only existing pos.css classes are restyled here.
+     * - WCAG 2.5.5 touch targets: session chip (was 36px) reaches the 44px
+     *   minimum.
+     * - WCAG 1.4.3 contrast: "·" separator and the online/offline label use
+     *   readable muted ink (>=4.5:1 both themes) while the status dot keeps
+     *   its semantic colour; dark-theme active toolbar labels (11px) drop
+     *   the accent tint that measured 3.34:1 - border/wash/icon still mark
+     *   the active state.
+     */
+    .pos-header .pos-chip--session {
+        min-height: 44px;
+    }
+    .pos-header .pos-header__sep {
+        color: var(--pos-text-muted);
+    }
+    .pos-header .pos-header__indicator {
+        color: var(--pos-text-muted);
+    }
+    .pos-header .pos-header__indicator.pos-indicator--online::before {
+        background: var(--pos-success);
+    }
+    .pos-header .pos-header__indicator.pos-indicator--offline::before {
+        background: var(--pos-danger);
+    }
+    [data-theme="dark"] .pos-header .pos-btn--active .pos-btn__label {
+        color: var(--pos-text);
+    }
+</style>
+<header class="pos-header">
+    <!-- Store / register / cashier identity -->
+    <div class="pos-header__info">
+        <span class="pos-header__store" x-text="$store.pos.config.store_name"></span>
+        <span class="pos-header__meta">
+            <span class="pos-header__register"
+                  x-text="$store.pos.session ? $store.pos.session.register_name : Pos.t('register')"></span>
+            <span class="pos-header__sep" aria-hidden="true">·</span>
+            <span class="pos-header__cashier"
+                  x-text="$store.pos.user ? $store.pos.user.name : ''"></span>
+        </span>
+    </div>
+
+    <!-- Session status chip (pulsing dot when open - CSS handles the dot) -->
+    <button type="button"
+            class="pos-chip pos-chip--session"
+            :class="$store.pos.session ? 'pos-chip--open' : 'pos-chip--closed'"
+            @click="$store.posRegister.openModal()"
+            x-text="$store.pos.session
+                ? (Pos.t('session_open') + ' · #' + $store.pos.session.session_id)
+                : Pos.t('no_session')"
+            title="<?= $escaper->escapeHtmlAttr(__('Register session')) ?>"></button>
+
+    <!-- Online / offline indicator -->
+    <span class="pos-indicator pos-header__indicator"
+          :class="$store.pos.online ? 'pos-indicator--online' : 'pos-indicator--offline'"
+          x-text="$store.pos.online ? Pos.t('online') : Pos.t('offline')"></span>
+
+    <?php /* Multi-cart tabs intentionally NOT rendered here (UI-fix item 52):
+        the single canonical tab strip lives in the SALE block
+        (panel-cart.phtml, posCart() state). */ ?>
+
+    <!-- Always-present action launcher (UI-fix contract §27 + §18c): ALL
+         primary actions - Holds / Orders / Session / Settings / Layout /
+         Lock / Exit - live compactly here by default; the movable "toolbar"
+         grid block is hidden by default (layout.js) and remains an opt-in
+         duplicate via Layout. Holds/Session toggle their floating panels
+         through the SAME pos:toggle-panel event the toolbar block uses
+         (app.js owns the boolean flip; layout.js mirrors + persists), and
+         Orders opens the orders/refunds modal. Shift+S / Shift+L keyboard
+         shortcuts (layout.js) open Settings / Layout as a backstop. -->
+    <div class="pos-header__actions">
+        <button type="button"
+                class="pos-btn pos-btn--icon"
+                :class="{ 'pos-btn--active': $store.pos.panels.holds }"
+                :aria-pressed="$store.pos.panels.holds ? 'true' : 'false'"
+                @click="window.dispatchEvent(new CustomEvent('pos:toggle-panel', { detail: { panel: 'holds' } }))"
+                title="<?= $escaper->escapeHtmlAttr(__('Held carts')) ?>">
+            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-hold"/></svg>
+            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Holds')) ?></span>
+        </button>
+
+        <button type="button"
+                class="pos-btn pos-btn--icon"
+                @click="$store.posOrders.openModal()"
+                title="<?= $escaper->escapeHtmlAttr(__('Orders / Refunds')) ?>">
+            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-receipt"/></svg>
+            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Orders')) ?></span>
+        </button>
+
+        <button type="button"
+                class="pos-btn pos-btn--icon"
+                :class="{ 'pos-btn--active': $store.pos.panels.session }"
+                :aria-pressed="$store.pos.panels.session ? 'true' : 'false'"
+                @click="window.dispatchEvent(new CustomEvent('pos:toggle-panel', { detail: { panel: 'session' } }))"
+                title="<?= $escaper->escapeHtmlAttr(__('Register session')) ?>">
+            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-report"/></svg>
+            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Session')) ?></span>
+        </button>
+
+        <button type="button"
+                class="pos-btn pos-btn--icon"
+                @click="$store.pos.openModal('settings')"
+                title="<?= $escaper->escapeHtmlAttr(__('Settings')) ?>">
+            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-settings"/></svg>
+            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Settings')) ?></span>
+        </button>
+
+        <button type="button"
+                class="pos-btn pos-btn--icon"
+                x-show="$store.pos.hasPermission('can_edit_layout')"
+                :class="{ 'pos-btn--active': $store.pos.layoutEdit }"
+                @click="$store.pos.openModal('layout')"
+                title="<?= $escaper->escapeHtmlAttr(__('Layout')) ?>"
+                x-cloak>
+            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-layout"/></svg>
+            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Layout')) ?></span>
+        </button>
+
+        <button type="button"
+                class="pos-btn pos-btn--icon"
+                @click="$store.pos.lock()"
+                title="<?= $escaper->escapeHtmlAttr(__('Lock terminal')) ?>">
+            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-lock"/></svg>
+            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Lock')) ?></span>
+        </button>
+
+        <button type="button"
+                class="pos-btn pos-btn--icon pos-btn--danger"
+                @click="$store.pos.logout()"
+                aria-label="<?= $escaper->escapeHtmlAttr(__('Log out')) ?>"
+                title="<?= $escaper->escapeHtmlAttr(__('Log out')) ?>">
+            <svg class="pos-icon" aria-hidden="true" focusable="false"><use href="#pi-logout"/></svg>
+            <span class="pos-btn__label"><?= $escaper->escapeHtml(__('Exit')) ?></span>
+        </button>
+    </div>
+</header>
